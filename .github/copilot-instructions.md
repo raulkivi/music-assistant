@@ -63,7 +63,7 @@ choir-music-assistant/
 ├── omr-mcp/                    # Image → MusicXML          ✅ mostly complete
 │   ├── HANDOVER.md             # ← read first when working on this server
 │   └── PLAN.md                 # ← architecture and decisions
-├── synth-mcp/                  # MusicXML → Audio          ❌ not started
+├── synth-mcp/                  # MusicXML → Audio          ⚠️ Phase 1 complete, WAV integration test pending
 │   ├── HANDOVER.md             # ← read first when working on this server
 │   └── PLAN.md                 # ← architecture and decisions
 ├── render-mcp/                 # MusicXML → PDF/PNG        ❌ not started
@@ -141,17 +141,28 @@ status changes, update the relevant entry here.
 
 ---
 
-### synth-mcp ❌ not started
+### synth-mcp ⚠️ Phase 1 complete — WAV integration test pending
 
 **Purpose:** Synthesizes audio from MusicXML with selectable voice parts and tempo control.
 
 **Read before working:** [synth-mcp/HANDOVER.md](../synth-mcp/HANDOVER.md) · [synth-mcp/PLAN.md](../synth-mcp/PLAN.md)
 
-**Planned tools:** `get_parts`, `synthesize`, `list_capabilities`
+**Implemented tools:** `get_parts`, `synthesize`, `list_capabilities`
 
-**Planned backend:** music21 (score parsing + MIDI export) + FluidSynth (MIDI → WAV)
+**Backend:** music21 (MusicXML → MIDI) + FluidSynth CLI (MIDI → WAV)
 
-**System dependency:** FluidSynth library (`apt install fluidsynth` / `brew install fluid-synth`)
+**System dependency:** FluidSynth (`apt install fluidsynth libfluidsynth-dev` / `brew install fluid-synth`)
+and an SF2 soundfont (path via `SYNTH_SOUNDFONT_PATH` env var)
+
+**Key files:**
+- `src/synth_mcp/server.py` — MCP tool definitions
+- `src/synth_mcp/engine.py` — music21 + FluidSynth synthesis pipeline
+- `src/synth_mcp/utils.py` — MusicXML validation, tempo validation, path helpers
+
+**Remaining work:** run end-to-end WAV integration test once FluidSynth + soundfont are available
+
+**Gotcha:** music21 9.x sets `part.id` to the part name (e.g. "Soprano"), not the XML `id`
+attribute (e.g. "P1"). Callers must use part names when specifying `part_ids`.
 
 ---
 

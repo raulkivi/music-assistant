@@ -1,0 +1,275 @@
+"""Tests for synth_mcp.engine."""
+
+import wave
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from synth_mcp.engine import (
+    ProcessingError,
+    _get_wav_duration,
+    extract_midi,
+    parse_parts,
+    synthesize_midi,
+)
+
+# ---------------------------------------------------------------------------
+# Shared fixture: minimal valid two-part MusicXML
+# ---------------------------------------------------------------------------
+
+SIMPLE_MUSICXML = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+    <score-part id="P2"><part-name>Alto</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><type>whole</type>
+      </note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1">
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>4</duration><type>whole</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>"""
+
+
+# ---------------------------------------------------------------------------
+# parse_parts
+# ---------------------------------------------------------------------------
+
+class TestParseParts:
+    def test_returns_two_parts(self):
+        parts = parse_parts(SIMPLE_MUSICXML)
+        assert len(parts) == 2
+
+    def test_part_ids(self):
+        # music21 9.x uses the part name as the id (e.g. "Soprano", not "P1")
+        parts = parse_parts(SIMPLE_MUSICXML)
+        ids = [p["id"] for p in parts]
+        assert "Soprano" in ids
+        assert "Alto" in ids
+
+    def test_part_names(self):
+        parts = parse_parts(SIMPLE_MUSICXML)
+        names = [p["name"] for p in parts]
+        assert "Soprano" in names
+        assert "Alto" in names
+
+    def test_measure_count(self):
+        parts = parse_parts(SIMPLE_MUSICXML)
+        for p in parts:
+            assert p["measure_count"] == 1
+
+    def test_invalid_xml_raises_invalid_input(self):
+        with pytest.raises(ProcessingError) as exc:
+            parse_parts("not xml at all")
+        assert exc.value.error_code == "INVALID_INPUT"
+
+    def test_empty_string_raises_error(self):
+        with pytest.raises(ProcessingError):
+            parse_parts("")
+
+    def test_xml_with_no_parts_raises_error(self):
+        xml = '<?xml version="1.0"?><score-partwise><part-list></part-list></score-partwise>'
+        with pytest.raises(ProcessingError) as exc:
+            parse_parts(xml)
+        assert exc.value.error_code == "INVALID_INPUT"
+
+
+# ---------------------------------------------------------------------------
+# extract_midi
+# ---------------------------------------------------------------------------
+
+class TestExtractMidi:
+    def test_returns_nonempty_bytes(self):
+        result = extract_midi(SIMPLE_MUSICXML, None, 1.0)
+        assert isinstance(result, bytes)
+        assert len(result) > 0
+
+    def test_midi_header_present(self):
+        result = extract_midi(SIMPLE_MUSICXML, None, 1.0)
+        assert result[:4] == b"MThd"
+
+    def test_part_filter_returns_bytes(self):
+        # Use the music21-assigned id ("Soprano"), not the XML attribute ("P1")
+        result = extract_midi(SIMPLE_MUSICXML, ["Soprano"], 1.0)
+        assert isinstance(result, bytes)
+        assert result[:4] == b"MThd"
+
+    def test_invalid_part_id_raises_invalid_parameter(self):
+        with pytest.raises(ProcessingError) as exc:
+            extract_midi(SIMPLE_MUSICXML, ["P99"], 1.0)
+        assert exc.value.error_code == "INVALID_PARAMETER"
+        assert "P99" in str(exc.value)
+
+    def test_invalid_xml_raises_invalid_input(self):
+        with pytest.raises(ProcessingError) as exc:
+            extract_midi("bad xml", None, 1.0)
+        assert exc.value.error_code == "INVALID_INPUT"
+
+    def test_tempo_factor_applied_returns_valid_midi(self):
+        result = extract_midi(SIMPLE_MUSICXML, None, 0.5)
+        assert result[:4] == b"MThd"
+
+    def test_all_valid_part_ids_accepted(self):
+        result = extract_midi(SIMPLE_MUSICXML, ["Soprano", "Alto"], 1.0)
+        assert result[:4] == b"MThd"
+
+
+# ---------------------------------------------------------------------------
+# synthesize_midi — unit tests (mocked environment)
+# ---------------------------------------------------------------------------
+
+class TestSynthesizeMidiUnit:
+    MINIMAL_MIDI = b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x00\x60"
+
+    def test_missing_soundfont_env_raises_error(self, monkeypatch):
+        monkeypatch.delenv("SYNTH_SOUNDFONT_PATH", raising=False)
+        with pytest.raises(ProcessingError) as exc:
+            synthesize_midi(self.MINIMAL_MIDI, "/tmp/test.wav")
+        assert exc.value.error_code == "PROCESSING_FAILED"
+        assert "SYNTH_SOUNDFONT_PATH" in str(exc.value)
+
+    def test_nonexistent_soundfont_file_raises_error(self, monkeypatch):
+        monkeypatch.setenv("SYNTH_SOUNDFONT_PATH", "/nonexistent/soundfont.sf2")
+        with pytest.raises(ProcessingError) as exc:
+            synthesize_midi(self.MINIMAL_MIDI, "/tmp/test.wav")
+        assert exc.value.error_code == "PROCESSING_FAILED"
+        assert "not found" in str(exc.value).lower()
+
+    def test_fluidsynth_import_failure_raises_error(self, monkeypatch, tmp_path):
+        sf = tmp_path / "dummy.sf2"
+        sf.write_bytes(b"RIFF")
+        monkeypatch.setenv("SYNTH_SOUNDFONT_PATH", str(sf))
+
+        with patch.dict("sys.modules", {"fluidsynth": None}):
+            with pytest.raises((ProcessingError, ImportError, TypeError)):
+                synthesize_midi(self.MINIMAL_MIDI, str(tmp_path / "out.wav"))
+
+
+# ---------------------------------------------------------------------------
+# _get_wav_duration
+# ---------------------------------------------------------------------------
+
+class TestGetWavDuration:
+    def test_one_second_wav(self, tmp_path):
+        wav_path = tmp_path / "test.wav"
+        sample_rate = 44100
+        with wave.open(str(wav_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(b"\x00\x00" * sample_rate)  # 1 second of silence
+
+        duration = _get_wav_duration(str(wav_path))
+        assert abs(duration - 1.0) < 0.01
+
+    def test_two_second_wav(self, tmp_path):
+        wav_path = tmp_path / "test2.wav"
+        sample_rate = 44100
+        with wave.open(str(wav_path), "w") as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(b"\x00\x00\x00\x00" * sample_rate * 2)
+
+        duration = _get_wav_duration(str(wav_path))
+        assert abs(duration - 2.0) < 0.01
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — require real MXL fixture files
+# ---------------------------------------------------------------------------
+
+FIXTURE_DIR = (
+    Path(__file__).parent.parent.parent
+    / "omr-mcp"
+    / "test_samples"
+    / "pdmx_satb_samples"
+    / "mxl"
+)
+
+
+def _read_mxl(path: Path) -> str:
+    """Extract MusicXML content from an MXL (ZIP) file."""
+    import zipfile
+
+    with zipfile.ZipFile(path) as zf:
+        xml_names = [
+            n
+            for n in zf.namelist()
+            if n.endswith(".xml") and "META-INF" not in n
+        ]
+        if not xml_names:
+            raise ValueError(f"No XML content found in {path}")
+        return zf.read(xml_names[0]).decode("utf-8")
+
+
+@pytest.mark.integration
+class TestIntegration:
+    def test_fixture_dir_exists(self):
+        assert FIXTURE_DIR.exists(), f"Fixture dir not found: {FIXTURE_DIR}"
+
+    def test_parse_parts_from_real_fixture(self):
+        fixtures = sorted(FIXTURE_DIR.glob("*.mxl"))
+        assert fixtures, f"No MXL fixtures in {FIXTURE_DIR}"
+
+        musicxml_str = _read_mxl(fixtures[0])
+        parts = parse_parts(musicxml_str)
+
+        assert len(parts) >= 2, "Expected at least 2 parts in SATB fixture"
+        for p in parts:
+            assert "id" in p
+            assert "name" in p
+            assert p["measure_count"] > 0
+
+    def test_extract_midi_from_real_fixture(self):
+        fixtures = sorted(FIXTURE_DIR.glob("*.mxl"))
+        assert fixtures
+
+        musicxml_str = _read_mxl(fixtures[0])
+        midi_bytes = extract_midi(musicxml_str, None, 1.0)
+
+        assert isinstance(midi_bytes, bytes)
+        assert midi_bytes[:4] == b"MThd", "Expected MIDI file header"
+        assert len(midi_bytes) > 100
+
+    def test_extract_midi_single_part(self):
+        fixtures = sorted(FIXTURE_DIR.glob("*.mxl"))
+        assert fixtures
+
+        musicxml_str = _read_mxl(fixtures[0])
+        parts = parse_parts(musicxml_str)
+        first_id = parts[0]["id"]
+
+        midi_bytes = extract_midi(musicxml_str, [first_id], 1.0)
+        assert midi_bytes[:4] == b"MThd"
+
+    def test_extract_midi_tempo_factor(self):
+        fixtures = sorted(FIXTURE_DIR.glob("*.mxl"))
+        assert fixtures
+
+        musicxml_str = _read_mxl(fixtures[0])
+        midi_normal = extract_midi(musicxml_str, None, 1.0)
+        midi_slow = extract_midi(musicxml_str, None, 0.5)
+
+        # Both should be valid MIDI files
+        assert midi_normal[:4] == b"MThd"
+        assert midi_slow[:4] == b"MThd"

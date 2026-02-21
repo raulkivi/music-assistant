@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "synth": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/synth-mcp", "run", "synth-mcp"],
+      "env": {
+        "SYNTH_SOUNDFONT_PATH": "/path/to/soundfont.sf2"
+      }
+    }
+  }
+}
