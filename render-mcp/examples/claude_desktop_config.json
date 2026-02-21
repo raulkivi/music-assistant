@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "render": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/render-mcp", "run", "render-mcp"],
+      "env": {}
+    }
+  }
+}
