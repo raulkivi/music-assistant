@@ -1,5 +1,6 @@
 """Tests for synth_mcp.engine."""
 
+import os
 import wave
 from pathlib import Path
 from unittest.mock import patch
@@ -273,3 +274,51 @@ class TestIntegration:
         # Both should be valid MIDI files
         assert midi_normal[:4] == b"MThd"
         assert midi_slow[:4] == b"MThd"
+
+    @pytest.mark.skipif(
+        not os.environ.get("SYNTH_SOUNDFONT_PATH"),
+        reason="SYNTH_SOUNDFONT_PATH not set — skipping WAV synthesis tests",
+    )
+    def test_synthesize_midi_produces_wav(self, tmp_path):
+        """Produce a real WAV from a real MXL fixture."""
+        fixtures = sorted(FIXTURE_DIR.glob("*.mxl"))
+        assert fixtures
+
+        musicxml_str = _read_mxl(fixtures[0])
+        midi_bytes = extract_midi(musicxml_str, None, 1.0)
+
+        out_wav = str(tmp_path / "output.wav")
+        duration = synthesize_midi(midi_bytes, out_wav)
+
+        assert Path(out_wav).exists(), "WAV file was not created"
+        assert Path(out_wav).stat().st_size > 44, "WAV file is too small (header-only)"
+        assert duration > 0.0, "Duration should be positive"
+
+    @pytest.mark.skipif(
+        not os.environ.get("SYNTH_SOUNDFONT_PATH"),
+        reason="SYNTH_SOUNDFONT_PATH not set — skipping WAV synthesis tests",
+    )
+    def test_single_part_shorter_than_double_tempo_all_parts(self, tmp_path):
+        """Single part WAV should be shorter than all parts at 2× tempo."""
+        fixtures = sorted(FIXTURE_DIR.glob("*.mxl"))
+        assert fixtures
+
+        musicxml_str = _read_mxl(fixtures[0])
+        parts = parse_parts(musicxml_str)
+        first_id = parts[0]["id"]
+
+        midi_one = extract_midi(musicxml_str, [first_id], 1.0)
+        midi_all_fast = extract_midi(musicxml_str, None, 2.0)
+
+        wav_one = str(tmp_path / "one_part.wav")
+        wav_all_fast = str(tmp_path / "all_fast.wav")
+
+        dur_one = synthesize_midi(midi_one, wav_one)
+        dur_all_fast = synthesize_midi(midi_all_fast, wav_all_fast)
+
+        assert dur_one > 0
+        assert dur_all_fast > 0
+        assert dur_one > dur_all_fast, (
+            f"Single part ({dur_one:.1f}s) should be longer than all-parts-2x-tempo "
+            f"({dur_all_fast:.1f}s)"
+        )

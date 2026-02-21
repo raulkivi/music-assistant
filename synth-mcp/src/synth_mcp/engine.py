@@ -13,7 +13,6 @@ Pipeline:
 import copy
 import logging
 import os
-import subprocess
 import tempfile
 import wave
 from pathlib import Path
@@ -203,16 +202,15 @@ def synthesize_midi(midi_bytes: bytes, output_path: str) -> float:
 
     # Verify the pyfluidsynth binding (catches a missing C library early)
     try:
-        import fluidsynth  # noqa: F401
+        import fluidsynth
     except (ImportError, OSError) as e:
         raise ProcessingError(
             f"FluidSynth library not available: {e}. "
-            "Install with: apt install fluidsynth libfluidsynth-dev (Linux) "
-            "or brew install fluid-synth (macOS)",
+            "Install libfluidsynth-dev (Linux) or brew install fluid-synth (macOS)",
             "PROCESSING_FAILED",
         )
 
-    # Write MIDI bytes to a temp file for the CLI
+    # Write MIDI bytes to a temp file for the player
     with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as f:
         f.write(midi_bytes)
         tmp_midi = f.name
@@ -220,37 +218,45 @@ def synthesize_midi(midi_bytes: bytes, output_path: str) -> float:
     try:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-        result = subprocess.run(
-            [
-                "fluidsynth",
-                "-ni",
-                soundfont_path,
-                tmp_midi,
-                "-F",
-                output_path,
-                "-r",
-                "44100",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=300,
+        fs = fluidsynth.Synth(
+            gain=0.5,
+            samplerate=44100,
+            **{
+                "audio.driver": "file",
+                "audio.file.name": output_path,
+                "audio.file.type": "wav",
+                "player.timing-source": "sample",
+                "synth.lock-memory": 0,
+            },
         )
-
-        if result.returncode != 0:
-            raise ProcessingError(
-                f"FluidSynth synthesis failed (exit {result.returncode}): "
-                f"{result.stderr.strip()}",
-                "PROCESSING_FAILED",
-            )
+        try:
+            sfid = fs.sfload(soundfont_path)
+            if sfid == fluidsynth.FLUID_FAILED:
+                raise ProcessingError(
+                    f"Failed to load soundfont: {soundfont_path!r}",
+                    "PROCESSING_FAILED",
+                )
+            fs.sfont_select(0, sfid)
+            fs.start(driver="file")
+            status = fs.play_midi_file(tmp_midi)
+            if status == fluidsynth.FLUID_FAILED:
+                raise ProcessingError("FluidSynth MIDI player failed to start", "PROCESSING_FAILED")
+            fluidsynth.fluid_player_join(fs.player)
+        finally:
+            fs.delete()
 
         if not Path(output_path).exists():
             raise ProcessingError(
-                "FluidSynth completed but did not produce an output WAV file.",
+                "Synthesis completed but did not produce an output WAV file.",
                 "PROCESSING_FAILED",
             )
 
         return _get_wav_duration(output_path)
 
+    except ProcessingError:
+        raise
+    except Exception as e:
+        raise ProcessingError(f"Synthesis failed: {e}", "PROCESSING_FAILED")
     finally:
         Path(tmp_midi).unlink(missing_ok=True)
 

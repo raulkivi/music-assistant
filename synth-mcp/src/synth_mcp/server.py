@@ -222,7 +222,12 @@ def main():
         logger.warning("FluidSynth library not available: %s", e)
 
     logger.info("Starting synth-mcp server…")
-    asyncio.run(mcp.server.stdio.run_server(app))
+
+    async def _run():
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await app.run(read_stream, write_stream, app.create_initialization_options())
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":
