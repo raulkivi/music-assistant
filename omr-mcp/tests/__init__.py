@@ -1,0 +1,1 @@
+"""Tests for OMR MCP server."""

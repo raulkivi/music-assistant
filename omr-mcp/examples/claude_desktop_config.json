@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "omr": {
+      "command": "uv",
+      "args": ["--directory", "/home/luarvik/src/choir-music-assistant/omr-mcp", "run", "omr-mcp"],
+      "env": {}
+    }
+  }
+}
