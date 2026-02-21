@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "musicxml-abc": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/musicxml-abc-mcp", "run", "musicxml-abc-mcp"],
+      "env": {}
+    }
+  }
+}

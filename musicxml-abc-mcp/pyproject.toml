@@ -1,0 +1,28 @@
+[project]
+name = "musicxml-abc-mcp"
+version = "0.1.0"
+description = "MCP server that converts between MusicXML and ABC notation for LLM-assisted score editing"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+    "music21>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+musicxml-abc-mcp = "musicxml_abc_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as slow integration tests that require real backends (run with '-m integration')",
+]

@@ -1,0 +1,36 @@
+[project]
+name = "pitch-mcp"
+version = "0.1.0"
+description = "MCP server for real-time pitch detection and score alignment using microphone input"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+    "music21>=9.0.0",
+    "librosa>=0.10.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "sounddevice>=0.4.0",
+]
+
+[project.optional-dependencies]
+# crepe requires TensorFlow (~500MB). Install manually if needed:
+#   pip install crepe tensorflow
+# Then set PITCH_BACKEND=crepe to activate.
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+pitch-mcp = "pitch_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as slow integration tests that require real audio fixtures",
+    "manual: marks tests that require a real microphone or audio loopback device",
+]

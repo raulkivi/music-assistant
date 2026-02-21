@@ -1,0 +1,183 @@
+import asyncio
+import json
+import logging
+
+import mcp.server.stdio
+from mcp.server import Server
+from mcp.types import TextContent, Tool
+
+from .engine import ProcessingError, abc_to_musicxml, musicxml_to_abc, validate_abc
+from .utils import validate_abc_str, validate_musicxml
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Server("musicxml-abc-mcp")
+
+
+@app.list_tools()
+async def list_tools():
+    return [
+        Tool(
+            name="musicxml_to_abc",
+            description=(
+                "Convert a MusicXML document to ABC notation. "
+                "ABC is compact and human-readable — ideal for Claude to read and edit scores directly. "
+                "Optionally filter to a single part."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "musicxml": {
+                        "type": "string",
+                        "description": "MusicXML document as a string",
+                    },
+                    "part_id": {
+                        "type": "string",
+                        "description": (
+                            "Export only this part (e.g. 'Soprano'). "
+                            "Omit to include all parts."
+                        ),
+                    },
+                },
+                "required": ["musicxml"],
+            },
+        ),
+        Tool(
+            name="abc_to_musicxml",
+            description=(
+                "Convert an ABC notation string back to MusicXML. "
+                "Use this after Claude has read or edited an ABC score to produce "
+                "MusicXML for synthesis or rendering."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "abc": {
+                        "type": "string",
+                        "description": "ABC notation string",
+                    },
+                },
+                "required": ["abc"],
+            },
+        ),
+        Tool(
+            name="validate_abc",
+            description=(
+                "Validate an ABC notation string. "
+                "Returns whether the ABC is parseable and lists any errors or warnings."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "abc": {
+                        "type": "string",
+                        "description": "ABC notation string to validate",
+                    },
+                },
+                "required": ["abc"],
+            },
+        ),
+        Tool(
+            name="list_capabilities",
+            description="List supported formats and available tools for this server",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+    ]
+
+
+def _error(message: str, code: str) -> list[TextContent]:
+    return [TextContent(type="text", text=json.dumps({"error": message, "error_code": code}))]
+
+
+@app.call_tool()
+async def call_tool(name: str, arguments: dict):
+    if name == "musicxml_to_abc":
+        musicxml = arguments.get("musicxml", "")
+        part_id = arguments.get("part_id")  # optional
+
+        ok, err = validate_musicxml(musicxml)
+        if not ok:
+            return _error(err, "INVALID_INPUT")
+
+        try:
+            result = musicxml_to_abc(musicxml, part_id)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        except ProcessingError as e:
+            return _error(str(e), e.error_code)
+        except Exception as e:
+            logger.error("musicxml_to_abc unexpected error: %s", e)
+            return _error(f"Unexpected error: {e}", "PROCESSING_FAILED")
+
+    elif name == "abc_to_musicxml":
+        abc = arguments.get("abc", "")
+
+        ok, err = validate_abc_str(abc)
+        if not ok:
+            return _error(err, "INVALID_INPUT")
+
+        try:
+            result = abc_to_musicxml(abc)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        except ProcessingError as e:
+            return _error(str(e), e.error_code)
+        except Exception as e:
+            logger.error("abc_to_musicxml unexpected error: %s", e)
+            return _error(f"Unexpected error: {e}", "PROCESSING_FAILED")
+
+    elif name == "validate_abc":
+        abc = arguments.get("abc", "")
+        # validate_abc handles empty string itself
+        try:
+            result = validate_abc(abc)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        except ProcessingError as e:
+            return _error(str(e), e.error_code)
+        except Exception as e:
+            logger.error("validate_abc unexpected error: %s", e)
+            return _error(f"Unexpected error: {e}", "PROCESSING_FAILED")
+
+    elif name == "list_capabilities":
+        backend_version = "unknown"
+        try:
+            import music21
+            backend_version = music21.__version__
+        except ImportError:
+            pass
+
+        result = {
+            "server": "musicxml-abc-mcp",
+            "version": "0.1.0",
+            "input_formats": ["musicxml", "abc"],
+            "output_formats": ["abc", "musicxml"],
+            "tools": ["musicxml_to_abc", "abc_to_musicxml", "validate_abc", "list_capabilities"],
+            "backend": "music21",
+            "backend_version": backend_version,
+            "abc_standard": "2.1",
+            "notes": (
+                "ABC output is generated by a custom serializer (music21 9.x has no ABC writer). "
+                "Round-trips preserve notes; dynamics and complex articulations are dropped."
+            ),
+        }
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    raise ValueError(f"Unknown tool: {name}")
+
+
+def main():
+    """Entry point for musicxml-abc-mcp."""
+    logger.info("Starting musicxml-abc-mcp server…")
+
+    async def _run():
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await app.run(read_stream, write_stream, app.create_initialization_options())
+
+    asyncio.run(_run())
+
+
+if __name__ == "__main__":
+    main()

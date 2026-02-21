@@ -1,0 +1,248 @@
+"""MCP protocol and tool schema tests for pitch-mcp."""
+
+import json
+import os
+import tempfile
+
+import numpy as np
+import pytest
+from scipy.io.wavfile import write as wav_write
+
+from pitch_mcp.server import app, call_tool, list_tools
+
+MINIMAL_MUSICXML = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <work><work-title>Test</work-title></work>
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above">
+        <direction-type>
+          <metronome><beat-unit>quarter</beat-unit><per-minute>120</per-minute></metronome>
+        </direction-type>
+      </direction>
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>8</duration><type>half</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def _make_wav(freq_hz: float = 440.0, duration_sec: float = 1.0) -> str:
+    sr = 22050
+    t = np.linspace(0, duration_sec, int(sr * duration_sec))
+    audio = (0.5 * np.sin(2 * np.pi * freq_hz * t)).astype(np.float32)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        path = f.name
+    wav_write(path, sr, (audio * 32767).astype(np.int16))
+    return path
+
+
+class TestListTools:
+    async def test_returns_six_tools(self):
+        tools = await list_tools()
+        names = {t.name for t in tools}
+        assert names == {
+            "analyze_recording",
+            "load_score",
+            "start_monitoring",
+            "get_current_position",
+            "stop_monitoring",
+            "list_capabilities",
+        }
+
+    async def test_analyze_recording_schema(self):
+        tools = await list_tools()
+        t = next(x for x in tools if x.name == "analyze_recording")
+        req = t.inputSchema["required"]
+        assert "audio_path" in req
+        assert "musicxml" in req
+        assert "part_id" in req
+
+    async def test_load_score_schema(self):
+        tools = await list_tools()
+        t = next(x for x in tools if x.name == "load_score")
+        assert "musicxml" in t.inputSchema["required"]
+        assert "part_id" in t.inputSchema["required"]
+
+    async def test_start_monitoring_schema(self):
+        tools = await list_tools()
+        t = next(x for x in tools if x.name == "start_monitoring")
+        assert "session_id" in t.inputSchema["required"]
+        # tempo_bpm is optional
+        assert "tempo_bpm" in t.inputSchema["properties"]
+
+    async def test_list_capabilities_no_required(self):
+        tools = await list_tools()
+        t = next(x for x in tools if x.name == "list_capabilities")
+        assert t.inputSchema["required"] == []
+
+
+class TestListCapabilities:
+    async def test_structure(self):
+        result = await call_tool("list_capabilities", {})
+        payload = json.loads(result[0].text)
+        assert payload["server"] == "pitch-mcp"
+        assert payload["version"] == "0.1.0"
+        assert "musicxml" in payload["input_formats"]
+        assert "wav" in payload["input_formats"]
+        assert "pitch_backend" in payload
+        assert "pitch_backend_version" in payload
+        assert "microphone_available" in payload
+        assert set(payload["tools"]) == {
+            "analyze_recording",
+            "load_score",
+            "start_monitoring",
+            "get_current_position",
+            "stop_monitoring",
+            "list_capabilities",
+        }
+
+
+class TestCallToolAnalyzeRecording:
+    async def test_missing_audio_file_returns_error(self):
+        result = await call_tool(
+            "analyze_recording",
+            {"audio_path": "/nonexistent.wav", "musicxml": MINIMAL_MUSICXML, "part_id": "Soprano"},
+        )
+        payload = json.loads(result[0].text)
+        assert "error" in payload
+        assert payload["error_code"] in ("FILE_NOT_FOUND", "UNSUPPORTED_FORMAT")
+
+    async def test_empty_musicxml_returns_error(self):
+        path = _make_wav()
+        try:
+            result = await call_tool(
+                "analyze_recording",
+                {"audio_path": path, "musicxml": "", "part_id": "Soprano"},
+            )
+            payload = json.loads(result[0].text)
+            assert "error" in payload
+        finally:
+            os.unlink(path)
+
+    async def test_invalid_part_id_returns_error(self):
+        path = _make_wav()
+        try:
+            result = await call_tool(
+                "analyze_recording",
+                {"audio_path": path, "musicxml": MINIMAL_MUSICXML, "part_id": "Tuba"},
+            )
+            payload = json.loads(result[0].text)
+            assert "error" in payload
+            assert payload["error_code"] == "INVALID_PARAMETER"
+        finally:
+            os.unlink(path)
+
+    async def test_valid_call_returns_analysis(self):
+        path = _make_wav(440.0, duration_sec=2.0)
+        try:
+            result = await call_tool(
+                "analyze_recording",
+                {"audio_path": path, "musicxml": MINIMAL_MUSICXML, "part_id": "Soprano"},
+            )
+            payload = json.loads(result[0].text)
+            assert "error" not in payload or "error_code" not in payload
+            assert "measures_covered" in payload
+            assert "note_accuracy" in payload
+        finally:
+            os.unlink(path)
+
+    async def test_unsupported_format_returns_error(self):
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            f.write(b"not a real mp3")
+            path = f.name
+        try:
+            result = await call_tool(
+                "analyze_recording",
+                {"audio_path": path, "musicxml": MINIMAL_MUSICXML, "part_id": "Soprano"},
+            )
+            payload = json.loads(result[0].text)
+            assert "error" in payload
+            assert payload["error_code"] == "UNSUPPORTED_FORMAT"
+        finally:
+            os.unlink(path)
+
+
+class TestCallToolLoadScore:
+    async def test_valid_load_score(self):
+        result = await call_tool("load_score", {"musicxml": MINIMAL_MUSICXML, "part_id": "Soprano"})
+        payload = json.loads(result[0].text)
+        assert "session_id" in payload
+        assert "part_name" in payload
+        assert "measure_count" in payload
+        assert payload["measure_count"] >= 1
+
+    async def test_invalid_part_id_returns_error(self):
+        result = await call_tool("load_score", {"musicxml": MINIMAL_MUSICXML, "part_id": "Tuba"})
+        payload = json.loads(result[0].text)
+        assert "error" in payload
+        assert payload["error_code"] == "INVALID_PARAMETER"
+
+
+class TestCallToolSessionLifecycle:
+    async def test_load_get_position_stop(self):
+        # Load score
+        load_result = await call_tool(
+            "load_score", {"musicxml": MINIMAL_MUSICXML, "part_id": "Soprano"}
+        )
+        sid = json.loads(load_result[0].text)["session_id"]
+
+        # Get position (before monitoring starts — returns default)
+        pos_result = await call_tool("get_current_position", {"session_id": sid})
+        pos = json.loads(pos_result[0].text)
+        assert pos["session_id"] == sid
+        assert "measure" in pos
+        assert "status" in pos
+
+        # Stop monitoring (no stream running — still returns summary)
+        stop_result = await call_tool("stop_monitoring", {"session_id": sid})
+        stop_payload = json.loads(stop_result[0].text)
+        assert "session_id" in stop_payload
+        assert "summary" in stop_payload
+
+    async def test_get_position_invalid_session(self):
+        result = await call_tool("get_current_position", {"session_id": "bad-id"})
+        payload = json.loads(result[0].text)
+        assert "error" in payload
+        assert payload["error_code"] == "SESSION_NOT_FOUND"
+
+    async def test_stop_monitoring_invalid_session(self):
+        result = await call_tool("stop_monitoring", {"session_id": "bad-id"})
+        payload = json.loads(result[0].text)
+        assert "error" in payload
+        assert payload["error_code"] == "SESSION_NOT_FOUND"
+
+    async def test_second_stop_fails(self):
+        load_result = await call_tool(
+            "load_score", {"musicxml": MINIMAL_MUSICXML, "part_id": "Soprano"}
+        )
+        sid = json.loads(load_result[0].text)["session_id"]
+        await call_tool("stop_monitoring", {"session_id": sid})
+        # Second stop should fail
+        result = await call_tool("stop_monitoring", {"session_id": sid})
+        payload = json.loads(result[0].text)
+        assert "error" in payload
+        assert payload["error_code"] == "SESSION_NOT_FOUND"
+
+
+class TestUnknownTool:
+    async def test_raises_value_error(self):
+        with pytest.raises(ValueError, match="Unknown tool"):
+            await call_tool("nonexistent_tool", {})

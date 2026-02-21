@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pitch": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/pitch-mcp", "run", "pitch-mcp"],
+      "env": {
+        "PITCH_BACKEND": "librosa"
+      }
+    }
+  }
+}
