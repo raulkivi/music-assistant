@@ -2,14 +2,15 @@ import time
 import re
 import shutil
 import xml.etree.ElementTree as ET
+from defusedxml.ElementTree import fromstring as _fromstring  # type: ignore[import-untyped]
 from pathlib import Path
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
-def _extract_musicxml_metadata(musicxml_content: str) -> dict:
+def _extract_musicxml_metadata(musicxml_content: str) -> dict[str, Any]:
     """Extract metadata from MusicXML content."""
     metadata = {}
     
@@ -31,11 +32,11 @@ def _extract_musicxml_metadata(musicxml_content: str) -> dict:
 
 def _run_oemer(image_path: str) -> str:
     """Run oemer on an image and return the output path."""
-    from oemer import generate
+    from oemer import generate  # type: ignore[import-untyped]
     return generate(image_path)
 
 
-def recognize_image(image_path: str) -> dict:
+def recognize_image(image_path: str) -> dict[str, Any]:
     """Process sheet music image and return MusicXML."""
     path = Path(image_path)
     
@@ -107,7 +108,7 @@ def _merge_musicxml_pages(musicxml_pages: list[str]) -> str:
     if len(musicxml_pages) == 1:
         return musicxml_pages[0]
 
-    trees = [ET.fromstring(page) for page in musicxml_pages]
+    trees = [_fromstring(page) for page in musicxml_pages]
     base = trees[0]
     base_parts = list(base.findall("part"))
 
@@ -127,7 +128,7 @@ def _merge_musicxml_pages(musicxml_pages: list[str]) -> str:
     return ET.tostring(base, encoding="unicode")
 
 
-def recognize_images(image_paths: list[str]) -> dict:
+def recognize_images(image_paths: list[str]) -> dict[str, Any]:
     """Process multiple sheet music images in page order and return merged MusicXML.
 
     Args:
@@ -176,7 +177,7 @@ def recognize_images(image_paths: list[str]) -> dict:
     }
 
 
-def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) -> dict:
+def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) -> dict[str, Any]:
     """Process sheet music image and save MusicXML to file."""
     path = Path(input_path)
     
