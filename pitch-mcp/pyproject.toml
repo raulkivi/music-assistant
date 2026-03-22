@@ -2,6 +2,22 @@
 name = "pitch-mcp"
 version = "0.1.0"
 description = "MCP server for real-time pitch detection and score alignment using microphone input"
+authors = [
+    { name = "Music Assistant Contributors" },
+]
+license = { text = "MIT" }
+keywords = ["mcp", "pitch", "music", "choir", "audio", "musicxml"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
@@ -23,6 +39,11 @@ dev = [
 
 [project.scripts]
 pitch-mcp = "pitch_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/raulkivi/music-assistant"
+Repository = "https://github.com/raulkivi/music-assistant"
+"Bug Tracker" = "https://github.com/raulkivi/music-assistant/issues"
 
 [build-system]
 requires = ["hatchling"]
