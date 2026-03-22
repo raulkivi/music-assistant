@@ -1,0 +1,67 @@
+name: Claude Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  security-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Security Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Perform a security-focused review of this PR. This project consists of
+            Python MCP servers for choir practice: omr-mcp (sheet music OCR),
+            render-mcp (MusicXML → PDF/PNG), synth-mcp (MusicXML → WAV synthesis),
+            musicxml-abc-mcp (format conversion), and pitch-mcp (real-time mic input).
+
+            Review for the following, rating each finding as CRITICAL / HIGH / MEDIUM / LOW / NONE:
+
+            1. **Input validation & path traversal**
+               - File path inputs sanitized? No directory traversal (../../)?
+               - MusicXML/ABC/image inputs validated before parsing?
+               - File size and format limits enforced?
+
+            2. **Command injection**
+               - Any use of shell=True, os.system, or subprocess with unsanitized input?
+               - External tool invocations (Verovio, FluidSynth, etc.) using safe APIs?
+
+            3. **XML security (XXE)**
+               - MusicXML parsing: is external entity expansion disabled?
+               - lxml/ElementTree configured safely?
+
+            4. **Sensitive data & secrets**
+               - No hardcoded API keys, tokens, or credentials?
+               - Temp files containing audio/score data cleaned up after use?
+
+            5. **Dependency security**
+               - New dependencies added to pyproject.toml pinned or reviewed?
+               - Any known-vulnerable package versions introduced?
+
+            6. **Error handling & information leakage**
+               - Exceptions caught and returned via structured error responses?
+               - No stack traces or internal paths leaked to MCP tool callers?
+
+            7. **Resource exhaustion**
+               - Large file uploads bounded?
+               - Audio processing (pitch-mcp) protected against runaway loops?
+
+            Post a summary comment with a severity table. Use inline comments for
+            specific findings. If no issues found, confirm with NONE for each category.
