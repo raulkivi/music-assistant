@@ -63,16 +63,16 @@ choir-music-assistant/
 ├── omr-mcp/                    # Image → MusicXML          ✅ mostly complete
 │   ├── HANDOVER.md             # ← read first when working on this server
 │   └── PLAN.md                 # ← architecture and decisions
-├── synth-mcp/                  # MusicXML → Audio          ⚠️ Phase 1 complete, WAV integration test pending
+├── synth-mcp/                  # MusicXML → Audio          ✅ Phase 1 COMPLETE
 │   ├── HANDOVER.md             # ← read first when working on this server
 │   └── PLAN.md                 # ← architecture and decisions
-├── render-mcp/                 # MusicXML → PDF/PNG        ❌ not started
+├── render-mcp/                 # MusicXML → PDF/PNG        ✅ Phase 1 COMPLETE
 │   ├── HANDOVER.md             # ← read first when working on this server
 │   └── PLAN.md                 # ← architecture and decisions
-├── musicxml-abc-mcp/           # MusicXML ↔ ABC            ❌ not started
+├── musicxml-abc-mcp/           # MusicXML ↔ ABC            ✅ Phase 1 COMPLETE
 │   ├── HANDOVER.md             # ← read first when working on this server
 │   └── PLAN.md                 # ← architecture and decisions
-└── pitch-mcp/                  # Mic audio → score pos/accuracy  ❌ not started
+└── pitch-mcp/                  # Mic audio → score pos/accuracy  ✅ Phase A+B COMPLETE
     ├── HANDOVER.md             # ← read first when working on this server
     └── PLAN.md                 # ← architecture and decisions
 ```
@@ -141,7 +141,7 @@ status changes, update the relevant entry here.
 
 ---
 
-### synth-mcp ⚠️ Phase 1 complete — WAV integration test pending
+### synth-mcp ✅ Phase 1 COMPLETE — 60 unit + 7 integration tests pass
 
 **Purpose:** Synthesizes audio from MusicXML with selectable voice parts and tempo control.
 
@@ -149,70 +149,90 @@ status changes, update the relevant entry here.
 
 **Implemented tools:** `get_parts`, `synthesize`, `list_capabilities`
 
-**Backend:** music21 (MusicXML → MIDI) + FluidSynth CLI (MIDI → WAV)
+**Backend:** music21 (MusicXML → MIDI) + pyfluidsynth library (MIDI → WAV, no subprocess)
 
-**System dependency:** FluidSynth (`apt install fluidsynth libfluidsynth-dev` / `brew install fluid-synth`)
-and an SF2 soundfont (path via `SYNTH_SOUNDFONT_PATH` env var)
+**System dependency:** `libfluidsynth.so.3` (installed at `/usr/lib/x86_64-linux-gnu/` on Ubuntu)
+and an SF2 soundfont (path via `SYNTH_SOUNDFONT_PATH` env var).
+System soundfonts: `/usr/share/sounds/sf2/TimGM6mb.sf2` or `default-GM.sf2`.
+Synthesis tests skip automatically when `SYNTH_SOUNDFONT_PATH` is unset.
 
 **Key files:**
 - `src/synth_mcp/server.py` — MCP tool definitions
-- `src/synth_mcp/engine.py` — music21 + FluidSynth synthesis pipeline
+- `src/synth_mcp/engine.py` — music21 + pyfluidsynth synthesis pipeline
 - `src/synth_mcp/utils.py` — MusicXML validation, tempo validation, path helpers
-
-**Remaining work:** run end-to-end WAV integration test once FluidSynth + soundfont are available
 
 **Gotcha:** music21 9.x sets `part.id` to the part name (e.g. "Soprano"), not the XML `id`
 attribute (e.g. "P1"). Callers must use part names when specifying `part_ids`.
 
 ---
 
-### render-mcp ❌ not started
+### render-mcp ✅ Phase 1 COMPLETE — 68/68 tests pass (includes integration)
 
 **Purpose:** Renders MusicXML to PDF or PNG for printing and display.
 
 **Read before working:** [render-mcp/HANDOVER.md](../render-mcp/HANDOVER.md) · [render-mcp/PLAN.md](../render-mcp/PLAN.md)
 
-**Planned tools:** `render_to_pdf`, `render_to_image`, `list_capabilities`
+**Implemented tools:** `render_to_pdf`, `render_to_image`, `list_capabilities`
 
-**Planned backend:** MuseScore 4 CLI (primary), Verovio (fallback, pure Python)
+**Backend:** Verovio (MusicXML → SVG, in-process) + cairosvg (SVG → PNG/PDF per page) + pypdf (merge pages)
 
-**System dependency:** MuseScore 4 for primary backend (optional — Verovio works without it)
+**System dependency:** `libcairo.so.2` (system-wide on Ubuntu — no sudo needed). No MuseScore required.
+
+**Key files:**
+- `src/render_mcp/server.py` — MCP tool definitions
+- `src/render_mcp/engine.py` — Verovio + cairosvg rendering pipeline
+- `src/render_mcp/utils.py` — MusicXML validation, path helpers
+
+**Gotcha:** Verovio SVGs have fixed pixel dimensions — use `scale=dpi/96.0` with cairosvg, not `dpi=`.
 
 ---
 
-### musicxml-abc-mcp ❌ not started
+### musicxml-abc-mcp ✅ Phase 1 COMPLETE — 71/71 tests pass (includes integration)
 
 **Purpose:** Converts between MusicXML and ABC notation so Claude can read and edit scores.
 
 **Read before working:** [musicxml-abc-mcp/HANDOVER.md](../musicxml-abc-mcp/HANDOVER.md) · [musicxml-abc-mcp/PLAN.md](../musicxml-abc-mcp/PLAN.md)
 
-**Planned tools:** `musicxml_to_abc`, `abc_to_musicxml`, `validate_abc`, `list_capabilities`
+**Implemented tools:** `musicxml_to_abc`, `abc_to_musicxml`, `validate_abc`, `list_capabilities`
 
-**Planned backend:** music21 (handles both formats natively)
+**Backend:** music21 (MusicXML parsing + abc_to_musicxml) + custom ABC serializer (MusicXML → ABC)
 
-**Note:** No system dependencies — pure Python. Simplest server to implement.
+**Note:** No system dependencies — pure Python.
+
+**Key files:**
+- `src/musicxml_abc_mcp/server.py` — MCP tool definitions
+- `src/musicxml_abc_mcp/engine.py` — conversion pipeline
+- `src/musicxml_abc_mcp/abc_serializer.py` — custom ABC writer
+
+**Gotcha:** music21 9.x has **no ABC write support** (`ConverterABC.registerOutputExtensions = ()`).
+A custom serializer walks the music21 note model directly.
+ABC octave convention (v2.1): lowercase `c` = C4 (middle C); uppercase `C` = C3.
 
 ---
 
-### pitch-mcp ❌ not started
+### pitch-mcp ✅ Phase A+B COMPLETE — 93/93 tests pass
 
 **Purpose:** Real-time pitch detection from microphone, compared against a reference score, to
 show current position and pitch accuracy while singing.
 
 **Read before working:** [pitch-mcp/HANDOVER.md](../pitch-mcp/HANDOVER.md) · [pitch-mcp/PLAN.md](../pitch-mcp/PLAN.md)
 
-**Planned tools:** `analyze_recording` (Phase A), `load_score`, `start_monitoring`,
+**Implemented tools:** `analyze_recording` (Phase A), `load_score`, `start_monitoring`,
 `get_current_position`, `stop_monitoring`, `list_capabilities` (Phase B)
 
-**Planned backends:** crepe (pitch detection, requires TensorFlow), sounddevice (audio input),
-dtaidistance (DTW score alignment)
+**Backend:** librosa pYIN (`librosa.pyin`) — pure Python, no system deps, excellent for singing voice.
+Real-time Phase B uses sounddevice + YIN autocorrelation in a worker thread.
 
-**System dependency:** PortAudio (`apt install libportaudio2` / `brew install portaudio`)
+**System dependency:** `libportaudio2` required at runtime for real-time streams (Phase B).
+Offline analysis (Phase A) has no system dependencies.
 
-**Build strategy:** Implement offline `analyze_recording` first. Add real-time tools only after
-offline analysis is verified. See HANDOVER.md for details.
+**Key files:**
+- `src/pitch_mcp/server.py` — MCP tool definitions
+- `src/pitch_mcp/engine.py` — offline pitch analysis (librosa pYIN)
+- `src/pitch_mcp/realtime.py` — real-time monitoring (sounddevice + YIN)
 
-**Note:** Most complex server — build last.
+**Gotcha:** `crepe` fails to build under uv (missing `pkg_resources`) — keep as manual opt-in only.
+`aubio` has no Python 3.13 wheel and requires system libs — use librosa instead.
 
 ---
 

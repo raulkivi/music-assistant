@@ -9,11 +9,11 @@ See [conventions.md](conventions.md) for coding standards all servers must follo
 ## Build Order
 
 ```
-1. omr-mcp            ✅ mostly complete — finish remaining items
-2. synth-mcp          ❌ next priority
-3. render-mcp         ❌
-4. musicxml-abc-mcp   ❌
-5. pitch-mcp          ❌ most complex — build last
+1. omr-mcp            ✅ mostly complete — integration tests pending
+2. synth-mcp          ✅ complete — 60 unit + 7 integration tests pass
+3. render-mcp         ✅ complete — 68/68 tests pass
+4. musicxml-abc-mcp   ✅ complete — 71/71 tests pass
+5. pitch-mcp          ✅ complete (Phase A+B) — 93/93 tests pass
 ```
 
 ---
