@@ -1,63 +1,57 @@
 # synth-mcp
 
-MCP server that synthesizes audio from a MusicXML score. Callers can select which voice parts to
-include (Soprano, Alto, Tenor, Bass, or any combination) and optionally adjust the tempo.
+MCP server that synthesizes audio from MusicXML. Supports voice part selection (Soprano, Alto, Tenor, Bass) and tempo control.
 
-**Output:** WAV file written to disk; path returned in the tool response.
+## What it does
 
----
+Takes a MusicXML score, optionally filters to one or more voice parts, and renders a WAV audio file using FluidSynth. Useful for choir singers who want to practice a specific voice part.
+
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_parts` | List all voice parts in a score — returns part name, ID, and measure count |
+| `synthesize` | Render the score (or selected parts) to a WAV file, with optional tempo adjustment |
+| `list_capabilities` | Return server metadata: backend version, soundfont status, FluidSynth availability |
 
 ## Installation
-
-### 1. Install system dependencies
-
-**Linux**
-```bash
-apt install fluidsynth libfluidsynth-dev
-```
-
-**macOS**
-```bash
-brew install fluid-synth
-```
-
-Verify:
-```bash
-fluidsynth --version
-```
-
-### 2. Download a soundfont
-
-The server requires an SF2 soundfont file. Both options below are free:
-
-| Soundfont | Size | Download |
-|-----------|------|----------|
-| MuseScore General (recommended) | ~200 MB | https://musescore.org/en/handbook/soundfonts-and-sfz-files |
-| GeneralUser GS | ~30 MB | https://schristiancollins.com/generaluser.php |
-
-Save the file somewhere permanent and note the path — you'll need it as `SYNTH_SOUNDFONT_PATH`.
-
-### 3. Install Python dependencies
 
 ```bash
 cd synth-mcp
 uv sync
 ```
 
-### 4. Verify the setup
+System library required:
 
 ```bash
-SYNTH_SOUNDFONT_PATH=/path/to/soundfont.sf2 uv run synth-mcp
+# Ubuntu / Debian
+sudo apt install libfluidsynth-dev
+
+# macOS
+brew install fluid-synth
 ```
 
-You should see log output confirming the soundfont is found and the server has started.
+A soundfont (SF2) file is also required. Free options:
 
----
+| Soundfont | Size | Notes |
+|-----------|------|-------|
+| TimGM6mb | ~6 MB | Ships with Ubuntu (`/usr/share/sounds/sf2/TimGM6mb.sf2`) |
+| MuseScore General | ~200 MB | Better quality; download from musescore.org |
+| GeneralUser GS | ~30 MB | Download from schristiancollins.com |
+
+## Running
+
+```bash
+SYNTH_SOUNDFONT_PATH=/usr/share/sounds/sf2/TimGM6mb.sf2 uv run synth-mcp
+```
+
+## Configuration
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SYNTH_SOUNDFONT_PATH` | Yes | Path to an SF2 soundfont file |
 
 ## Claude Desktop configuration
-
-Merge the following into `~/.config/claude/claude_desktop_config.json`
-(see `examples/claude_desktop_config.json`):
 
 ```json
 {
@@ -73,94 +67,60 @@ Merge the following into `~/.config/claude/claude_desktop_config.json`
 }
 ```
 
----
+## Usage examples
 
-## Tools
-
-### `get_parts`
-
-Lists all voice parts in a MusicXML score.
-
-**Input**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `musicxml` | string | Yes | MusicXML document as a string |
-
-**Output**
 ```json
+// List parts in a score
+{"tool": "get_parts", "arguments": {"musicxml": "<score-partwise>...</score-partwise>"}}
+
+// Synthesize the full score
 {
-  "parts": [
-    {"id": "P1", "name": "Soprano", "measure_count": 32},
-    {"id": "P2", "name": "Alto",    "measure_count": 32},
-    {"id": "P3", "name": "Tenor",   "measure_count": 32},
-    {"id": "P4", "name": "Bass",    "measure_count": 32}
-  ]
+  "tool": "synthesize",
+  "arguments": {
+    "musicxml": "<score-partwise>...</score-partwise>",
+    "output_path": "/tmp/full.wav"
+  }
+}
+
+// Synthesize Soprano part only at 80% tempo
+{
+  "tool": "synthesize",
+  "arguments": {
+    "musicxml": "<score-partwise>...</score-partwise>",
+    "output_path": "/tmp/soprano.wav",
+    "part_ids": ["P1"],
+    "tempo_factor": 0.8
+  }
 }
 ```
 
----
+`tempo_factor` range: 0.25–4.0. Values below 1.0 slow down; above 1.0 speed up. Does not affect pitch.
 
-### `synthesize`
-
-Synthesizes a WAV file from a MusicXML score.
-
-**Input**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `musicxml` | string | Yes | MusicXML document as a string |
-| `part_ids` | list[string] | No | Part IDs to include (default: all parts) |
-| `tempo_factor` | float | No | Tempo multiplier 0.25–4.0 (default: 1.0) |
-| `output_path` | string | No | WAV output path (auto-generated if omitted) |
-
-**Output**
-```json
-{
-  "audio_path": "/tmp/synth-mcp/output_20260221_143012.wav",
-  "format": "wav",
-  "duration_seconds": 142.5,
-  "parts_included": ["P1"],
-  "tempo_factor": 0.75
-}
-```
-
----
-
-### `list_capabilities`
-
-Returns server metadata and runtime status.
-
-**Output**
-```json
-{
-  "server": "synth-mcp",
-  "version": "0.1.0",
-  "input_formats": ["musicxml"],
-  "output_formats": ["wav"],
-  "tools": ["get_parts", "synthesize", "list_capabilities"],
-  "backend": "fluidsynth",
-  "backend_version": "2.3.4",
-  "soundfont_loaded": true,
-  "soundfont_path": "/path/to/soundfont.sf2",
-  "fluidsynth_available": true
-}
-```
-
----
-
-## Running tests
+## Testing
 
 ```bash
-# Unit tests only (fast, no system dependencies needed beyond music21)
-uv run pytest tests/ -v
+# Unit tests (no soundfont required)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v
 
-# Include integration tests (requires MXL fixtures from omr-mcp)
-uv run pytest tests/ -v -m integration
+# Integration tests (synthesizes real audio)
+VIRTUAL_ENV= SYNTH_SOUNDFONT_PATH=/usr/share/sounds/sf2/TimGM6mb.sf2 \
+  .venv/bin/pytest tests/ -v -m integration
 ```
 
----
+## Dependencies
+
+- [music21](https://web.mit.edu/music21/) — score parsing and MIDI export
+- [pyfluidsynth](https://github.com/nwhitehead/pyfluidsynth) — Python bindings for FluidSynth
+- [mcp](https://github.com/modelcontextprotocol/python-sdk) — MCP protocol
 
 ## Known limitations
 
-- music21's MIDI export may drop some articulations and dynamics. Acceptable for practice playback.
-- Audio output is always WAV. Convert to MP3 with `ffmpeg -i out.wav out.mp3` if needed.
-- Large scores (100+ measures) may take several seconds to synthesize.
+- music21's MIDI export may drop some articulations and dynamics
+- Audio output is always WAV; convert with `ffmpeg -i out.wav out.mp3` if needed
+- Large scores (100+ measures) may take several seconds to synthesize
+
+## System requirements
+
+- Python 3.11+
+- `libfluidsynth` shared library (`libfluidsynth.so.3` on Linux)
+- An SF2 soundfont file

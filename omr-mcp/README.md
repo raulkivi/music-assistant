@@ -1,241 +1,103 @@
-# OMR MCP Server
+# omr-mcp
 
-A Model Context Protocol (MCP) server for Optical Music Recognition (OMR) that converts sheet music images into MusicXML format.
+MCP server that converts sheet music images to MusicXML using optical music recognition (OMR).
 
-## Features
+## What it does
 
-- 🎼 Convert PNG/JPEG sheet music images to MusicXML
-- 🤖 Powered by [oemer](https://github.com/BreezeWhite/oemer) deep learning engine
-- 🔌 MCP server compatible with Claude Desktop and other MCP clients
-- 🖥️ Runs locally - no cloud APIs required
-- 📝 Returns structured MusicXML that works with MuseScore, Finale, etc.
+Takes a photo or scan of printed sheet music and returns a MusicXML document. Handles single pages or multi-page scores. Feeds directly into the rest of the choir-music-assistant pipeline.
 
-## Quick Start
+## Tools
 
-### Prerequisites
+| Tool | Description |
+|------|-------------|
+| `recognize_sheet` | Convert a single image (file path or base64) to MusicXML string |
+| `recognize_sheet_to_file` | Convert a single image and write MusicXML to a file |
+| `recognize_sheets` | Process multiple pages and merge them into one MusicXML document |
+| `list_capabilities` | Return server metadata: backend version, input/output formats, available tools |
 
-- Python 3.11 or higher
-- [uv](https://github.com/astral-sh/uv) package manager (recommended) or pip
-
-### Installation
-
-1. **Clone and navigate to the project:**
-   ```bash
-   cd /home/luarvik/src/choir-music-assistant/omr-mcp
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   # Using uv (recommended)
-   uv sync
-   
-   # Or using pip
-   pip install -e .
-   ```
-
-3. **Test oemer installation:**
-   ```bash
-   python -c "from oemer import generate; print('oemer installed successfully')"
-   ```
-   
-   **Note:** On first run, oemer will download model checkpoints (~10 minutes). This is a one-time setup.
-
-### Usage with Claude Desktop
-
-1. **Add to your Claude Desktop configuration** (`~/.config/claude/claude_desktop_config.json`):
-   ```json
-   {
-     "mcpServers": {
-       "omr": {
-         "command": "uv",
-         "args": ["--directory", "/home/luarvik/src/choir-music-assistant/omr-mcp", "run", "omr-mcp"]
-       }
-     }
-   }
-   ```
-
-2. **Restart Claude Desktop**
-
-3. **Use the OMR tool in Claude:**
-   - Upload or reference a sheet music image (PNG/JPEG)
-   - Ask Claude to "recognize the sheet music" or "convert this to MusicXML"
-   - Claude will use the `recognize_sheet` tool automatically
-
-### Standalone Testing
-
-Test the server directly:
+## Installation
 
 ```bash
-# Run the server
-uv run omr-mcp
-
-# In another terminal, test with sample input
-echo '{"method": "tools/call", "params": {"name": "recognize_sheet", "arguments": {"image_path": "/path/to/your/sheet.png"}}}' | uv run omr-mcp
+cd omr-mcp
+uv sync
 ```
 
-## Available Tools
+On first run, oemer downloads ~100 MB of model checkpoints. This happens once and is cached.
 
-### `recognize_sheet`
+## Running
 
-Converts sheet music images to MusicXML format.
+```bash
+uv run omr-mcp
+```
 
-**Input:**
-- `image_path` (string): Path to PNG or JPEG sheet music image
+No environment variables required.
 
-**Output:**
+## Claude Desktop configuration
+
 ```json
 {
-  "musicxml": "<score-partwise>...</score-partwise>",
-  "metadata": {
-    "source": "/path/to/input.png",
-    "processing_time_ms": 15000,
-    "output_path": "/path/to/generated.musicxml",
-    "engine": "oemer"
+  "mcpServers": {
+    "omr": {
+      "command": "uv",
+      "args": ["--directory", "/absolute/path/to/omr-mcp", "run", "omr-mcp"]
+    }
   }
 }
 ```
 
-**Error handling:**
+## Usage examples
+
 ```json
-{
-  "error": "File not found: /path/to/missing.png"
-}
+// Recognize a single image file
+{"tool": "recognize_sheet", "arguments": {"image_path": "/path/to/scan.png"}}
+
+// Recognize from base64-encoded image
+{"tool": "recognize_sheet", "arguments": {"image_base64": "<base64 data>", "mime_type": "image/jpeg"}}
+
+// Process multiple pages into one score
+{"tool": "recognize_sheets", "arguments": {"image_paths": ["/path/page1.png", "/path/page2.png"]}}
+
+// Save result directly to file
+{"tool": "recognize_sheet_to_file", "arguments": {"image_path": "/path/scan.png", "output_path": "/tmp/score.mxl"}}
 ```
 
-## How It Works
-
-1. **Input Validation:** Checks file format and existence
-2. **OMR Processing:** Uses oemer's deep learning models to:
-   - Detect staff lines and musical symbols
-   - Classify notes, rests, clefs, time signatures
-   - Extract musical semantics
-3. **MusicXML Generation:** Converts recognized elements to standard MusicXML format
-4. **Return Results:** Provides both the MusicXML content and processing metadata
-
-## Technical Details
-
-### OMR Engine: oemer
-
-- **Architecture:** UNet segmentation + SVM classification
-- **Models:** 
-  - Staff line detection
-  - Symbol segmentation (notes, clefs, accidentals)
-  - Classification refinement
-- **Runtime:** ONNX Runtime (CPU-optimized)
-- **Processing Time:** 3-5 minutes per page (varies by complexity)
-
-### Supported Formats
-
-- **Input:** PNG, JPEG images
-- **Output:** MusicXML (compatible with MuseScore, Finale, Sibelius, etc.)
-
-### Performance Notes
-
-- First run downloads models (~10 min setup)
-- Processing time depends on image complexity and hardware
-- GPU acceleration available but not required
-- Works entirely offline
-
-## Troubleshooting
-
-### Common Issues
-
-**Models not downloading:**
-```bash
-# Manual model download
-pip install oemer[tf]  # If you prefer TensorFlow backend
-```
-
-**Import errors:**
-```bash
-# Verify installation
-uv run python -c "import oemer; print('OK')"
-```
-
-**Claude Desktop not finding server:**
-- Check config file path: `~/.config/claude/claude_desktop_config.json`
-- Verify absolute paths in configuration
-- Restart Claude Desktop after config changes
-
-**Poor recognition quality:**
-- Ensure high-resolution, clear images
-- Try scanning at 300+ DPI
-- Avoid handwritten scores for best results
-
-### Logging
-
-Enable detailed logging:
-```bash
-export OMR_LOG_LEVEL=DEBUG
-uv run omr-mcp
-```
-
-## Development
-
-### Project Structure
-
-```
-omr-mcp/
-├── pyproject.toml          # Project configuration
-├── README.md               # This file
-├── HANDOVER.md             # Testing handover notes
-├── src/
-│   └── omr_mcp/
-│       ├── __init__.py
-│       ├── server.py       # MCP server implementation
-│       ├── omr_engine.py   # oemer integration
-│       └── utils.py        # Helper functions
-├── tests/                  # Unit tests (26 passing)
-│   ├── test_server.py
-│   ├── test_omr.py
-│   └── test_utils.py
-└── test_samples/           # SATB a cappella test data
-    ├── pdmx_satb_samples/  # PNG + MusicXML pairs
-    └── pdmx_full/          # Full PDMX dataset (14GB)
-```
-
-### Running Tests
+## Testing
 
 ```bash
-# Install dev dependencies
-uv sync --dev
+# Unit tests (fast, no model required)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v
 
-# Run unit tests (26 passing)
-uv run pytest tests/ -v
+# Integration tests (requires model download, ~10 min per page)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration
 ```
 
-### Test Samples
+## Test samples
 
-SATB a cappella test samples are available in `test_samples/pdmx_satb_samples/`:
+SATB a cappella samples are available in `test_samples/pdmx_satb_samples/`:
 
 ```
 pdmx_satb_samples/
-├── mxl/    # 10 MusicXML files (ground truth)
-├── pdf/    # 10 PDF scores  
-└── png/    # 42 PNG images (OMR input)
+├── mxl/    # MusicXML ground truth
+├── pdf/    # PDF scores
+└── png/    # PNG images (OMR input)
 ```
 
-**To extract more samples** (1684 available):
-```bash
-# Edit max_samples in the script, then run:
-python test_samples/download_pdmx_satb.py
-```
+Source: [PDMX dataset](https://zenodo.org/records/14648209) — 250K+ public domain scores.
 
-Source: [PDMX dataset](https://zenodo.org/records/14648209) - 250K+ public domain MusicXML scores.
+## Dependencies
 
-## Roadmap
+- [oemer](https://github.com/BreezeWhite/oemer) — deep learning OMR engine (UNet + SVM, ONNX Runtime)
+- [Pillow](https://python-pillow.org/) — image loading and validation
+- [defusedxml](https://github.com/tiran/defusedxml) — safe XML parsing
+- [mcp](https://github.com/modelcontextprotocol/python-sdk) — MCP protocol
 
-- [x] Phase 1: Basic OMR functionality
-- [x] Phase 2: Enhanced input handling (base64 support)
-- [x] Phase 3: Quality improvements and testing (unit tests + SATB fixtures)
-- [ ] Phase 4: Advanced features (Audiveris backend, confidence scores)
+## Performance notes
 
-## License
+- Processing time: 3–5 minutes per page on CPU
+- oemer output may vary slightly between runs — do not assert on exact XML equality
+- The generated MusicXML is functionally correct but may not pass strict schema validation
 
-This project is open source. See individual dependencies for their licenses:
-- [oemer](https://github.com/BreezeWhite/oemer) - OMR engine
-- [MCP](https://github.com/modelcontextprotocol/python-sdk) - Protocol implementation
+## System requirements
 
-## Contributing
-
-Issues and pull requests welcome! Please ensure compatibility with the MCP specification and test with real sheet music examples.
+- Python 3.11+
+- No system libraries required (ONNX Runtime is bundled via pip)

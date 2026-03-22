@@ -15,7 +15,7 @@ See [docs/implementation-plan.md](../docs/implementation-plan.md) for the high-l
 
 ### Before you write any code
 
-**Always read these two files for the server you are working on, in this order:**
+**Always read these files for the server you are working on, in this order:**
 
 1. **`<name>-mcp/HANDOVER.md`** — start here. Current status, what to build first, pre-flight
    checks, known gotchas, and the definition of done. Written specifically for someone picking up
@@ -24,7 +24,13 @@ See [docs/implementation-plan.md](../docs/implementation-plan.md) for the high-l
 2. **`<name>-mcp/PLAN.md`** — architecture decisions, technology rationale, tool contracts, full
    phase breakdown, and risks. The reference document for why things are designed as they are.
 
-3. **`docs/conventions.md`** — once, if you haven't already. Defines the project structure,
+3. **`<name>-mcp/docs/requirements.md`** — functional and non-functional requirements, interface
+   contracts, error codes, and testing obligations for that server.
+
+4. **`<name>-mcp/docs/architecture.md`** — component diagram, module responsibilities, data-flow
+   traces, key algorithms, and dependency notes for that server.
+
+5. **`docs/conventions.md`** — once, if you haven't already. Defines the project structure,
    required tools, error format, testing requirements, and naming rules that all servers must follow.
 
 > Do not start implementing until you have run the pre-flight verification steps in HANDOVER.md.
@@ -45,6 +51,14 @@ Update the documents so the next person (or session) starts with accurate inform
 - Update the "Remaining Work" section (for omr-mcp) or phase status
 - Note any technology decisions that changed from the original plan, with rationale
 
+**In `<name>-mcp/docs/requirements.md`:**
+- Update any FR/NFR/IR entries whose behaviour changed
+- Add new requirements if new tools or constraints were introduced
+
+**In `<name>-mcp/docs/architecture.md`:**
+- Update component diagrams, data-flow traces, or algorithm descriptions if the implementation changed
+- Keep module responsibility tables and function lists in sync with the actual source
+
 **In this file (`copilot-instructions.md`):**
 - Update the server's status marker (❌ / ⚠️ / ✅) in the Repository Structure tree
 - Update the server's tool list and backend in the MCP Servers Reference section if they changed
@@ -61,20 +75,40 @@ choir-music-assistant/
 │   ├── implementation-plan.md  # High-level build order and server summaries
 │   └── sources.md              # Reference links (ABC notation, etc.)
 ├── omr-mcp/                    # Image → MusicXML          ✅ mostly complete
+│   ├── README.md               # User-facing: tools, install, run, test
 │   ├── HANDOVER.md             # ← read first when working on this server
-│   └── PLAN.md                 # ← architecture and decisions
+│   ├── PLAN.md                 # ← architecture and decisions
+│   └── docs/
+│       ├── requirements.md     # Functional/non-functional requirements, error codes
+│       └── architecture.md     # Component diagram, data flow, algorithms
 ├── synth-mcp/                  # MusicXML → Audio          ✅ Phase 1 COMPLETE
-│   ├── HANDOVER.md             # ← read first when working on this server
-│   └── PLAN.md                 # ← architecture and decisions
+│   ├── README.md
+│   ├── HANDOVER.md
+│   ├── PLAN.md
+│   └── docs/
+│       ├── requirements.md
+│       └── architecture.md
 ├── render-mcp/                 # MusicXML → PDF/PNG        ✅ Phase 1 COMPLETE
-│   ├── HANDOVER.md             # ← read first when working on this server
-│   └── PLAN.md                 # ← architecture and decisions
+│   ├── README.md
+│   ├── HANDOVER.md
+│   ├── PLAN.md
+│   └── docs/
+│       ├── requirements.md
+│       └── architecture.md
 ├── musicxml-abc-mcp/           # MusicXML ↔ ABC            ✅ Phase 1 COMPLETE
-│   ├── HANDOVER.md             # ← read first when working on this server
-│   └── PLAN.md                 # ← architecture and decisions
+│   ├── README.md
+│   ├── HANDOVER.md
+│   ├── PLAN.md
+│   └── docs/
+│       ├── requirements.md
+│       └── architecture.md
 └── pitch-mcp/                  # Mic audio → score pos/accuracy  ✅ Phase A+B COMPLETE
-    ├── HANDOVER.md             # ← read first when working on this server
-    └── PLAN.md                 # ← architecture and decisions
+    ├── README.md
+    ├── HANDOVER.md
+    ├── PLAN.md
+    └── docs/
+        ├── requirements.md
+        └── architecture.md
 ```
 
 Each `*-mcp/` directory is a self-contained Python package deployable independently.
@@ -120,7 +154,7 @@ status changes, update the relevant entry here.
 
 **Purpose:** Optical Music Recognition — converts sheet music images to MusicXML.
 
-**Read before working:** [omr-mcp/HANDOVER.md](../omr-mcp/HANDOVER.md) · [omr-mcp/PLAN.md](../omr-mcp/PLAN.md)
+**Read before working:** [omr-mcp/HANDOVER.md](../omr-mcp/HANDOVER.md) · [omr-mcp/PLAN.md](../omr-mcp/PLAN.md) · [omr-mcp/docs/requirements.md](../omr-mcp/docs/requirements.md) · [omr-mcp/docs/architecture.md](../omr-mcp/docs/architecture.md)
 
 **Implemented tools:**
 - `recognize_sheet` — image path or base64 → MusicXML string
@@ -145,7 +179,7 @@ status changes, update the relevant entry here.
 
 **Purpose:** Synthesizes audio from MusicXML with selectable voice parts and tempo control.
 
-**Read before working:** [synth-mcp/HANDOVER.md](../synth-mcp/HANDOVER.md) · [synth-mcp/PLAN.md](../synth-mcp/PLAN.md)
+**Read before working:** [synth-mcp/HANDOVER.md](../synth-mcp/HANDOVER.md) · [synth-mcp/PLAN.md](../synth-mcp/PLAN.md) · [synth-mcp/docs/requirements.md](../synth-mcp/docs/requirements.md) · [synth-mcp/docs/architecture.md](../synth-mcp/docs/architecture.md)
 
 **Implemented tools:** `get_parts`, `synthesize`, `list_capabilities`
 
@@ -170,7 +204,7 @@ attribute (e.g. "P1"). Callers must use part names when specifying `part_ids`.
 
 **Purpose:** Renders MusicXML to PDF or PNG for printing and display.
 
-**Read before working:** [render-mcp/HANDOVER.md](../render-mcp/HANDOVER.md) · [render-mcp/PLAN.md](../render-mcp/PLAN.md)
+**Read before working:** [render-mcp/HANDOVER.md](../render-mcp/HANDOVER.md) · [render-mcp/PLAN.md](../render-mcp/PLAN.md) · [render-mcp/docs/requirements.md](../render-mcp/docs/requirements.md) · [render-mcp/docs/architecture.md](../render-mcp/docs/architecture.md)
 
 **Implemented tools:** `render_to_pdf`, `render_to_image`, `list_capabilities`
 
@@ -191,7 +225,7 @@ attribute (e.g. "P1"). Callers must use part names when specifying `part_ids`.
 
 **Purpose:** Converts between MusicXML and ABC notation so Claude can read and edit scores.
 
-**Read before working:** [musicxml-abc-mcp/HANDOVER.md](../musicxml-abc-mcp/HANDOVER.md) · [musicxml-abc-mcp/PLAN.md](../musicxml-abc-mcp/PLAN.md)
+**Read before working:** [musicxml-abc-mcp/HANDOVER.md](../musicxml-abc-mcp/HANDOVER.md) · [musicxml-abc-mcp/PLAN.md](../musicxml-abc-mcp/PLAN.md) · [musicxml-abc-mcp/docs/requirements.md](../musicxml-abc-mcp/docs/requirements.md) · [musicxml-abc-mcp/docs/architecture.md](../musicxml-abc-mcp/docs/architecture.md)
 
 **Implemented tools:** `musicxml_to_abc`, `abc_to_musicxml`, `validate_abc`, `list_capabilities`
 
@@ -201,8 +235,8 @@ attribute (e.g. "P1"). Callers must use part names when specifying `part_ids`.
 
 **Key files:**
 - `src/musicxml_abc_mcp/server.py` — MCP tool definitions
-- `src/musicxml_abc_mcp/engine.py` — conversion pipeline
-- `src/musicxml_abc_mcp/abc_serializer.py` — custom ABC writer
+- `src/musicxml_abc_mcp/engine.py` — conversion pipeline + custom ABC serializer (no separate file)
+- `src/musicxml_abc_mcp/utils.py` — input validation
 
 **Gotcha:** music21 9.x has **no ABC write support** (`ConverterABC.registerOutputExtensions = ()`).
 A custom serializer walks the music21 note model directly.
@@ -215,7 +249,7 @@ ABC octave convention (v2.1): lowercase `c` = C4 (middle C); uppercase `C` = C3.
 **Purpose:** Real-time pitch detection from microphone, compared against a reference score, to
 show current position and pitch accuracy while singing.
 
-**Read before working:** [pitch-mcp/HANDOVER.md](../pitch-mcp/HANDOVER.md) · [pitch-mcp/PLAN.md](../pitch-mcp/PLAN.md)
+**Read before working:** [pitch-mcp/HANDOVER.md](../pitch-mcp/HANDOVER.md) · [pitch-mcp/PLAN.md](../pitch-mcp/PLAN.md) · [pitch-mcp/docs/requirements.md](../pitch-mcp/docs/requirements.md) · [pitch-mcp/docs/architecture.md](../pitch-mcp/docs/architecture.md)
 
 **Implemented tools:** `analyze_recording` (Phase A), `load_score`, `start_monitoring`,
 `get_current_position`, `stop_monitoring`, `list_capabilities` (Phase B)
@@ -228,8 +262,10 @@ Offline analysis (Phase A) has no system dependencies.
 
 **Key files:**
 - `src/pitch_mcp/server.py` — MCP tool definitions
-- `src/pitch_mcp/engine.py` — offline pitch analysis (librosa pYIN)
-- `src/pitch_mcp/realtime.py` — real-time monitoring (sounddevice + YIN)
+- `src/pitch_mcp/engine.py` — session management + offline/real-time orchestration
+- `src/pitch_mcp/pitch_detector.py` — librosa pYIN + optional crepe backend
+- `src/pitch_mcp/aligner.py` — time-domain alignment, accuracy classification
+- `src/pitch_mcp/utils.py` — note sequence extraction, metronome map, Hz↔note conversion
 
 **Gotcha:** `crepe` fails to build under uv (missing `pkg_resources`) — keep as manual opt-in only.
 `aubio` has no Python 3.13 wheel and requires system libs — use librosa instead.
