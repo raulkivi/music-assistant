@@ -1,0 +1,122 @@
+# publish.yml — PyPI Trusted Publishing workflow
+#
+# ONE-TIME SETUP (per server, on PyPI):
+#   1. Create an account at https://pypi.org and log in.
+#   2. For each server package, go to:
+#      https://pypi.org/manage/account/publishing/
+#   3. Click "Add a new publisher" and fill in:
+#      - PyPI project name:  e.g. omr-mcp
+#      - GitHub owner:       raulkivi
+#      - Repository name:    music-assistant
+#      - Workflow filename:  publish.yml
+#      - Environment name:   pypi
+#   4. Repeat for each of the five packages:
+#      omr-mcp, synth-mcp, render-mcp, musicxml-abc-mcp, pitch-mcp
+#
+#   Full guide: https://docs.pypi.org/trusted-publishers/
+#
+# PUBLISHING A RELEASE:
+#   Push a tag matching the server prefix, e.g.:
+#     git tag omr-mcp/v0.1.0 && git push origin omr-mcp/v0.1.0
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "omr-mcp/v*"
+      - "synth-mcp/v*"
+      - "render-mcp/v*"
+      - "musicxml-abc-mcp/v*"
+      - "pitch-mcp/v*"
+
+jobs:
+  publish-omr-mcp:
+    name: Publish omr-mcp
+    if: startsWith(github.ref, 'refs/tags/omr-mcp/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        working-directory: omr-mcp
+        run: uv build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: omr-mcp/dist/
+
+  publish-synth-mcp:
+    name: Publish synth-mcp
+    if: startsWith(github.ref, 'refs/tags/synth-mcp/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        working-directory: synth-mcp
+        run: uv build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: synth-mcp/dist/
+
+  publish-render-mcp:
+    name: Publish render-mcp
+    if: startsWith(github.ref, 'refs/tags/render-mcp/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        working-directory: render-mcp
+        run: uv build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: render-mcp/dist/
+
+  publish-musicxml-abc-mcp:
+    name: Publish musicxml-abc-mcp
+    if: startsWith(github.ref, 'refs/tags/musicxml-abc-mcp/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        working-directory: musicxml-abc-mcp
+        run: uv build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: musicxml-abc-mcp/dist/
+
+  publish-pitch-mcp:
+    name: Publish pitch-mcp
+    if: startsWith(github.ref, 'refs/tags/pitch-mcp/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        working-directory: pitch-mcp
+        run: uv build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pitch-mcp/dist/
