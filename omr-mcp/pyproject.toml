@@ -1,7 +1,23 @@
 [project]
 name = "omr-mcp"
 version = "0.1.0"
-description = "MCP server for Optical Music Recognition"
+description = "MCP server for Optical Music Recognition — converts sheet music images to MusicXML"
+authors = [
+    { name = "Raul Kivi", email = "raulkivi@users.noreply.github.com" },
+]
+license = { text = "MIT" }
+keywords = ["mcp", "music", "omr", "optical-music-recognition", "musicxml", "sheet-music"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
@@ -12,6 +28,11 @@ dependencies = [
 
 [project.scripts]
 omr-mcp = "omr_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/raulkivi/music-assistant"
+Repository = "https://github.com/raulkivi/music-assistant"
+"Bug Tracker" = "https://github.com/raulkivi/music-assistant/issues"
 
 [build-system]
 requires = ["hatchling"]
