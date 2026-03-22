@@ -1,0 +1,12 @@
+{
+  "_comment": "Place this file at: ~/.config/zed/settings.json",
+  "context_servers": {
+    "musicxml-abc": {
+      "command": {
+        "path": "uvx",
+        "args": ["musicxml-abc-mcp"]
+      },
+      "settings": {}
+    }
+  }
+}
