@@ -16,7 +16,7 @@ Five independent MCP servers for choir practice. Each server lives in its own di
 | musicxml-abc-mcp | `musicxml-abc-mcp/` | MusicXML ↔ ABC | LLM editing bridge |
 | pitch-mcp | `pitch-mcp/` | Mic audio + score → position + accuracy | Sing-along feedback |
 
-See [docs/Intro.md](docs/Intro.md) for the full vision and data flow.
+See [README.md](README.md) for the full vision and data flow.
 
 ---
 
