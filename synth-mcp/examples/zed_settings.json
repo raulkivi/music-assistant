@@ -1,0 +1,14 @@
+{
+  "_comment": "Place this file at ~/.config/zed/settings.json",
+  "context_servers": {
+    "synth": {
+      "command": {
+        "path": "uvx",
+        "args": ["synth-mcp"],
+        "env": {
+          "SYNTH_SOUNDFONT_PATH": "~/.local/share/sounds/sf2/TimGM6mb.sf2"
+        }
+      }
+    }
+  }
+}

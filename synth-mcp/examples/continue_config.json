@@ -1,12 +1,13 @@
 {
-  "_comment": "Place this file at ~/.config/claude/claude_desktop_config.json",
-  "mcpServers": {
-    "synth": {
+  "_comment": "Place this file at ~/.continue/config.json",
+  "mcpServers": [
+    {
+      "name": "synth",
       "command": "uvx",
       "args": ["synth-mcp"],
       "env": {
         "SYNTH_SOUNDFONT_PATH": "~/.local/share/sounds/sf2/TimGM6mb.sf2"
       }
     }
-  }
+  ]
 }
