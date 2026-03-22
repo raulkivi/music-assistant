@@ -1,0 +1,11 @@
+// Place at: ~/.config/zed/settings.json
+{
+  "context_servers": {
+    "omr": {
+      "command": {
+        "path": "uvx",
+        "args": ["omr-mcp"]
+      }
+    }
+  }
+}
