@@ -1,0 +1,10 @@
+{
+  "_comment": "Place this file at: ~/.continue/config.json",
+  "mcpServers": [
+    {
+      "name": "musicxml-abc",
+      "command": "uvx",
+      "args": ["musicxml-abc-mcp"]
+    }
+  ]
+}

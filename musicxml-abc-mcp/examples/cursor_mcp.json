@@ -1,5 +1,5 @@
 {
-  "_comment": "Place this file at: ~/.config/claude/claude_desktop_config.json",
+  "_comment": "Place this file at: ~/.cursor/mcp.json",
   "mcpServers": {
     "musicxml-abc": {
       "command": "uvx",
