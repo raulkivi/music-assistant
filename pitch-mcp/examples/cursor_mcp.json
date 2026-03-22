@@ -1,5 +1,5 @@
 {
-  "//": "Place this file at: ~/.config/claude/claude_desktop_config.json",
+  "//": "Place this file at: ~/.cursor/mcp.json",
   "mcpServers": {
     "pitch": {
       "command": "uvx",
