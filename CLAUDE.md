@@ -20,19 +20,43 @@ See [docs/Intro.md](docs/Intro.md) for the full vision and data flow.
 
 ---
 
-## Documentation map
+## Working on a specific server
 
-Each MCP server has four documents:
+**Each server has its own local instruction files — read these first:**
 
-| File | Purpose |
-|------|---------|
-| `README.md` | User-facing: install, run, tools, examples |
-| `HANDOVER.md` | Developer onboarding: status, gotchas, definition of done |
-| `PLAN.md` | Architecture decisions and phase breakdown |
-| `docs/requirements.md` | Functional/non-functional requirements and interface contracts |
-| `docs/architecture.md` | Component diagram, data-flow traces, key algorithms |
+| Server | Claude Code | Copilot |
+|--------|-------------|---------|
+| omr-mcp | [omr-mcp/CLAUDE.md](omr-mcp/CLAUDE.md) | [omr-mcp/.github/copilot-instructions.md](omr-mcp/.github/copilot-instructions.md) |
+| synth-mcp | [synth-mcp/CLAUDE.md](synth-mcp/CLAUDE.md) | [synth-mcp/.github/copilot-instructions.md](synth-mcp/.github/copilot-instructions.md) |
+| render-mcp | [render-mcp/CLAUDE.md](render-mcp/CLAUDE.md) | [render-mcp/.github/copilot-instructions.md](render-mcp/.github/copilot-instructions.md) |
+| musicxml-abc-mcp | [musicxml-abc-mcp/CLAUDE.md](musicxml-abc-mcp/CLAUDE.md) | [musicxml-abc-mcp/.github/copilot-instructions.md](musicxml-abc-mcp/.github/copilot-instructions.md) |
+| pitch-mcp | [pitch-mcp/CLAUDE.md](pitch-mcp/CLAUDE.md) | [pitch-mcp/.github/copilot-instructions.md](pitch-mcp/.github/copilot-instructions.md) |
 
-**Before touching any server, read its HANDOVER.md, then docs/architecture.md.**
+Also read the server's `HANDOVER.md`, `PLAN.md`, `docs/requirements.md`, and `docs/architecture.md`
+before writing any code.
+
+---
+
+## Server status
+
+| Server | Status | Tests |
+|--------|--------|-------|
+| omr-mcp | ✅ mostly complete (integration tests pending) | 36 unit |
+| synth-mcp | ✅ Phase 1 complete | 60 unit + 7 integration |
+| render-mcp | ✅ Phase 1 complete | 68/68 incl. integration |
+| musicxml-abc-mcp | ✅ Phase 1 complete | 71/71 incl. integration |
+| pitch-mcp | ✅ Phase A+B complete | 93/93 |
+
+---
+
+## Hard rules (apply to all servers)
+
+- **Never use `pip install`** — always `uv sync` or `uv add`
+- **Never share venvs** between servers; each has its own `.venv`
+- **`engine.py` must not import from `mcp`** — keeps it unit-testable without the MCP stack
+- **All tool handlers must be `async def`**
+- **All error responses** must use `{"error": "...", "error_code": "..."}` — see [docs/conventions.md](docs/conventions.md) for the full code list
+- **Integration tests** must be marked `@pytest.mark.integration` and must not run in the default `pytest` invocation
 
 ---
 
@@ -59,30 +83,7 @@ Install dev dependencies: `uv sync` (or `uv sync --extra dev` for musicxml-abc-m
 
 ---
 
-## Server status
-
-| Server | Status | Tests |
-|--------|--------|-------|
-| omr-mcp | ✅ mostly complete (integration tests pending) | 36 unit |
-| synth-mcp | ✅ Phase 1 complete | 60 unit + 7 integration |
-| render-mcp | ✅ Phase 1 complete | 68/68 incl. integration |
-| musicxml-abc-mcp | ✅ Phase 1 complete | 71/71 incl. integration |
-| pitch-mcp | ✅ Phase A+B complete | 93/93 |
-
----
-
-## Hard rules
-
-- **Never use `pip install`** — always `uv sync` or `uv add`
-- **Never share venvs** between servers; each has its own `.venv`
-- **`engine.py` must not import from `mcp`** — keeps it unit-testable without the MCP stack
-- **All tool handlers must be `async def`**
-- **All error responses** must use `{"error": "...", "error_code": "..."}` — see [docs/conventions.md](docs/conventions.md) for the full code list
-- **Integration tests** must be marked `@pytest.mark.integration` and must not run in the default `pytest` invocation
-
----
-
-## MCP stdio pattern
+## MCP stdio pattern (applies to all servers)
 
 Use `mcp.server.stdio.stdio_server()` — `run_server()` does not exist in the current SDK:
 
@@ -93,27 +94,6 @@ async def _run():
 
 asyncio.run(_run())
 ```
-
----
-
-## Known gotchas (non-obvious, apply across sessions)
-
-| Server | Gotcha |
-|--------|--------|
-| synth-mcp | music21 9.x: `part.id` is the part *name* (e.g. "Soprano"), not the XML `<part id>` attribute ("P1") |
-| synth-mcp | FluidSynth: use `audio.driver=file` + `fluid_player_join()` — no subprocess, no CLI |
-| synth-mcp | Synthesis tests skip automatically when `SYNTH_SOUNDFONT_PATH` is unset |
-| render-mcp | Verovio SVGs have fixed pixel dims — use `scale=dpi/96.0` with cairosvg, not `dpi=` |
-| render-mcp | MuseScore CLI is not installed; Verovio is the active backend |
-| musicxml-abc-mcp | music21 9.x has no ABC write support — custom serializer in `engine.py` handles it |
-| musicxml-abc-mcp | ABC v2.1: lowercase `c` = C4 (middle C); uppercase `C` = C3 |
-| musicxml-abc-mcp | Use `uv sync --extra dev` (not `--group dev`) to install pytest |
-| pitch-mcp | `crepe` fails to build under uv (missing `pkg_resources`) — keep as manual opt-in only |
-| pitch-mcp | `aubio` has no Python 3.13 wheel — use librosa instead |
-| pitch-mcp | sounddevice streams fail at runtime if `libportaudio2` is absent |
-| pitch-mcp | Audio callback must never do I/O or locking — queue chunks only |
-| omr-mcp | oemer downloads ~100 MB of model checkpoints on first run (~10 min) |
-| omr-mcp | oemer output varies slightly between runs — do not assert byte-identical XML |
 
 ---
 
@@ -137,5 +117,5 @@ When you finish work or reach a milestone, update:
 2. `<server>/PLAN.md` — check off phase items, note any changed decisions
 3. `<server>/docs/requirements.md` — update if behaviour or interfaces changed
 4. `<server>/docs/architecture.md` — update diagrams/algorithms if implementation changed
-5. `.github/copilot-instructions.md` — update status markers and tool lists
-6. This file (`CLAUDE.md`) — update status table and gotchas if needed
+5. `.github/copilot-instructions.md` — update status markers
+6. This file (`CLAUDE.md`) — update status table if needed

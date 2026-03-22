@@ -1,0 +1,147 @@
+# pitch-mcp — Copilot Instructions
+
+## What This Server Does
+
+Real-time pitch detection from microphone input compared against a reference MusicXML score.
+Reports current score position (measure + beat), pitch accuracy in cents, and sharp/flat/on-pitch
+status while a singer sings. This is the most complex server in the project — it is stateful.
+
+**Status:** Phase A (offline analysis) + Phase B (real-time skeleton) complete. 93/93 tests pass.
+
+---
+
+## Before You Write Any Code
+
+Read these documents in order:
+1. **`HANDOVER.md`** — current status, remaining work, pre-flight checks, known gotchas, definition of done
+2. **`PLAN.md`** — architecture decisions and technology rationale
+3. **`docs/requirements.md`** — functional and non-functional requirements, error codes
+4. **`docs/architecture.md`** — component diagram, data-flow, module responsibilities
+
+---
+
+## Project Structure
+
+```
+pitch-mcp/
+├── pyproject.toml
+├── .python-version          # "llm311"
+├── src/pitch_mcp/
+│   ├── server.py            # MCP tool definitions and async handlers
+│   ├── engine.py            # Session management, offline/real-time orchestration — NO mcp imports
+│   ├── pitch_detector.py    # librosa pYIN backend (+ optional crepe)
+│   ├── aligner.py           # Time-domain alignment, accuracy classification
+│   └── utils.py             # Note sequence extraction, metronome map, Hz↔note conversion
+├── tests/
+│   ├── test_server.py       # protocol tests
+│   ├── test_engine.py       # unit + integration tests
+│   ├── test_utils.py        # unit tests
+│   └── fixtures/
+│       ├── soprano_phrase.wav    # short vocal recording for offline tests
+│       ├── reference.musicxml   # matching score
+│       └── README.md
+└── docs/
+    ├── requirements.md
+    └── architecture.md
+```
+
+MXL test fixtures are in `../omr-mcp/test_samples/pdmx_satb_samples/mxl/` — 10 SATB files.
+
+---
+
+## Implemented Tools
+
+| Tool | Phase | Description |
+|------|-------|-------------|
+| `analyze_recording` | A | Pre-recorded WAV + MusicXML → per-note pitch accuracy report |
+| `load_score` | B | Load MusicXML into session, return session_id |
+| `start_monitoring` | B | Open mic stream for a session |
+| `get_current_position` | B | Current measure/beat/pitch/accuracy from active session |
+| `stop_monitoring` | B | Stop stream, return summary, clean up session |
+| `list_capabilities` | — | Server metadata, pitch backend and version |
+
+---
+
+## Environment
+
+- **Primary pitch backend:** `librosa.pyin` — pure Python, no system deps, excellent for voice
+- **Real-time (Phase B):** `sounddevice` + YIN autocorrelation in worker thread
+- **System dep for Phase B:** `libportaudio2` — must be present for real-time streams
+  Phase A (`analyze_recording`) has no system dependencies
+- **`crepe`:** fails to build under uv — do not add to default deps; keep as manual opt-in only
+- **`aubio`:** no Python 3.13 wheel — do not use; use librosa instead
+
+---
+
+## Coding Standards
+
+- **Package manager:** `uv` only — never `pip install`
+- **`engine.py` must not import from `mcp`** — keeps it independently unit-testable
+- **All tool handlers must be `async def`**
+- **All error responses:** `{"error": "human description", "error_code": "SCREAMING_SNAKE"}`
+- **Standard error codes:** `FILE_NOT_FOUND`, `UNSUPPORTED_FORMAT`, `INVALID_INPUT`, `PROCESSING_FAILED`, `INVALID_PARAMETER`, `SESSION_NOT_FOUND`
+- **Integration tests** → `@pytest.mark.integration`; real-mic tests → `@pytest.mark.manual`
+- **Audio callback must never do I/O or locking** — queue audio chunks to `queue.Queue` only
+- **Python 3.11+**; `asyncio_mode = "auto"` in pytest config
+
+---
+
+## Running Tests
+
+```bash
+# Unit + integration tests (fast, no mic needed)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v
+
+# Integration tests only
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration
+
+# Manual tests (real mic — skip in CI)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual
+
+# Install dependencies
+uv sync
+```
+
+---
+
+## MCP Server Startup Pattern
+
+```python
+import asyncio
+import mcp.server.stdio
+
+async def _run():
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        await app.run(read_stream, write_stream, app.create_initialization_options())
+
+asyncio.run(_run())
+```
+
+`mcp.server.stdio.run_server()` does not exist — always use the context manager above.
+
+---
+
+## Known Gotchas
+
+- **`crepe` fails to build under uv** (missing `pkg_resources`) — do not add to dependencies.
+- **`aubio` has no Python 3.13 wheel** — use `librosa` for all pitch detection.
+- **sounddevice streams require `libportaudio2`** at runtime. Phase A works without it.
+- **This is the only stateful server.** Sessions live in a module-level dict in `engine.py`.
+  Protect shared state with `threading.Lock` — both the audio callback thread and MCP handlers
+  access session state.
+- **Audio callback constraint:** never do I/O, locking, or heavy computation inside the
+  sounddevice callback. Only write chunks to a `queue.Queue`.
+- **`analyze_recording` accepts 16-bit PCM WAV only.** Reject MP3/FLAC with `UNSUPPORTED_FORMAT`.
+- **Accuracy thresholds:** on_pitch = ±25 cents; sharp = >+25 cents; flat = <−25 cents.
+- **Session cleanup:** `stop_monitoring` must delete the session — a second call must return
+  `SESSION_NOT_FOUND`.
+
+---
+
+## When You Finish Work
+
+Update these documents so the next session starts with accurate information:
+- **`HANDOVER.md`** — check off done items, add new gotchas, update status
+- **`PLAN.md`** — check off completed phase items, note changed decisions
+- **`docs/requirements.md`** — update if behaviour or interfaces changed
+- **`docs/architecture.md`** — update if implementation structure changed
