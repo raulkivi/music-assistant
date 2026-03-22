@@ -1,0 +1,10 @@
+// Place at: ~/.continue/config.json
+{
+  "mcpServers": [
+    {
+      "name": "omr",
+      "command": "uvx",
+      "args": ["omr-mcp"]
+    }
+  ]
+}
