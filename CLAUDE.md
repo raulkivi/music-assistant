@@ -32,7 +32,7 @@ See [docs/Intro.md](docs/Intro.md) for the full vision and data flow.
 | musicxml-abc-mcp | [musicxml-abc-mcp/CLAUDE.md](musicxml-abc-mcp/CLAUDE.md) | [musicxml-abc-mcp/.github/copilot-instructions.md](musicxml-abc-mcp/.github/copilot-instructions.md) |
 | pitch-mcp | [pitch-mcp/CLAUDE.md](pitch-mcp/CLAUDE.md) | [pitch-mcp/.github/copilot-instructions.md](pitch-mcp/.github/copilot-instructions.md) |
 
-Also read the server's `HANDOVER.md`, `PLAN.md`, `docs/requirements.md`, and `docs/architecture.md`
+Also read the server's `docs/HANDOVER.md`, `docs/PLAN.md`, `docs/requirements.md`, and `docs/architecture.md`
 before writing any code.
 
 ---
@@ -113,8 +113,8 @@ Soundfonts available at `/usr/share/sounds/sf2/` — `TimGM6mb.sf2` and `default
 
 When you finish work or reach a milestone, update:
 
-1. `<server>/HANDOVER.md` — check off done items, add new gotchas
-2. `<server>/PLAN.md` — check off phase items, note any changed decisions
+1. `<server>/docs/HANDOVER.md` — check off done items, add new gotchas
+2. `<server>/docs/PLAN.md` — check off phase items, note any changed decisions
 3. `<server>/docs/requirements.md` — update if behaviour or interfaces changed
 4. `<server>/docs/architecture.md` — update diagrams/algorithms if implementation changed
 5. `.github/copilot-instructions.md` — update status markers

@@ -28,8 +28,8 @@ Install dependencies: `uv sync`
 | `src/render_mcp/server.py` | MCP tool definitions and handlers |
 | `src/render_mcp/engine.py` | Verovio + cairosvg rendering pipeline (no MCP imports) |
 | `src/render_mcp/utils.py` | MusicXML validation, path helpers |
-| `HANDOVER.md` | Status, remaining work, definition of done |
-| `PLAN.md` | Architecture decisions and rationale |
+| `docs/HANDOVER.md` | Status, remaining work, definition of done |
+| `docs/PLAN.md` | Architecture decisions and rationale |
 | `docs/requirements.md` | Functional/non-functional requirements |
 | `docs/architecture.md` | Component diagram and data-flow |
 
@@ -110,7 +110,7 @@ asyncio.run(_run())
 ## Document Update Policy
 
 When you finish work or reach a milestone, update:
-1. `HANDOVER.md` — check off done items, add new gotchas
-2. `PLAN.md` — check off phase items, note changed decisions
+1. `docs/HANDOVER.md` — check off done items, add new gotchas
+2. `docs/PLAN.md` — check off phase items, note changed decisions
 3. `docs/requirements.md` — update if behaviour changed
 4. `docs/architecture.md` — update if implementation changed

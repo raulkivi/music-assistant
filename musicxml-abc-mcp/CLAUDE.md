@@ -28,8 +28,8 @@ Install dependencies: `uv sync --extra dev` (note: `--extra dev`, not `--group d
 | `src/musicxml_abc_mcp/server.py` | MCP tool definitions and handlers |
 | `src/musicxml_abc_mcp/engine.py` | Conversion pipeline + custom ABC serializer (no MCP imports) |
 | `src/musicxml_abc_mcp/utils.py` | Input validation helpers |
-| `HANDOVER.md` | Status, remaining work, definition of done |
-| `PLAN.md` | Architecture decisions and rationale |
+| `docs/HANDOVER.md` | Status, remaining work, definition of done |
+| `docs/PLAN.md` | Architecture decisions and rationale |
 | `docs/requirements.md` | Functional/non-functional requirements |
 | `docs/architecture.md` | Component diagram and data-flow |
 
@@ -129,7 +129,7 @@ Standard: https://abcnotation.com/wiki/abc:standard:v2.1
 ## Document Update Policy
 
 When you finish work or reach a milestone, update:
-1. `HANDOVER.md` — check off done items, add new gotchas
-2. `PLAN.md` — check off phase items, note changed decisions
+1. `docs/HANDOVER.md` — check off done items, add new gotchas
+2. `docs/PLAN.md` — check off phase items, note changed decisions
 3. `docs/requirements.md` — update if behaviour changed
 4. `docs/architecture.md` — update if implementation changed

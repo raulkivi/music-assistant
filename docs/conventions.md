@@ -13,7 +13,6 @@ Each MCP server lives in its own top-level directory and is independently deploy
 <name>-mcp/
 ├── pyproject.toml              # Package config and dependencies
 ├── README.md                   # Installation, usage, tool reference
-├── PLAN.md                     # Architecture decisions and rationale
 ├── .python-version             # Pins Python version (3.11)
 ├── src/
 │   └── <name>_mcp/
@@ -29,6 +28,11 @@ Each MCP server lives in its own top-level directory and is independently deploy
 │   └── fixtures/               # Static test data (images, XML files, audio)
 │       └── README.md           # Documents what fixtures are available and why
 ├── test_samples/               # Larger real-world samples (not committed if >10MB)
+├── docs/
+│   ├── HANDOVER.md             # Status, remaining work, definition of done
+│   ├── PLAN.md                 # Architecture decisions and rationale
+│   ├── requirements.md         # Functional and non-functional requirements
+│   └── architecture.md         # Component diagram and data-flow
 └── examples/
     └── claude_desktop_config.json  # Ready-to-use Claude Desktop config snippet
 ```

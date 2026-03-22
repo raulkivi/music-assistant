@@ -26,7 +26,7 @@ Each server has its own local instruction file — **read it before writing any 
 The per-server files contain: status, key files, implemented tools, environment setup, test
 commands, known gotchas, and the definition of done.
 
-Also read the server's `HANDOVER.md`, `PLAN.md`, `docs/requirements.md`, and `docs/architecture.md`
+Also read the server's `docs/HANDOVER.md`, `docs/PLAN.md`, `docs/requirements.md`, and `docs/architecture.md`
 before writing any code.
 
 ---
@@ -93,8 +93,8 @@ uv sync                                                # install dependencies
 
 Update the documents so the next person (or session) starts with accurate information:
 
-- **`<server>/HANDOVER.md`** — check off done items, add new gotchas, update status
-- **`<server>/PLAN.md`** — check off completed phase items, note changed decisions
+- **`<server>/docs/HANDOVER.md`** — check off done items, add new gotchas, update status
+- **`<server>/docs/PLAN.md`** — check off completed phase items, note changed decisions
 - **`<server>/docs/requirements.md`** — update if behaviour or interfaces changed
 - **`<server>/docs/architecture.md`** — update if implementation structure changed
 - **`<server>/.github/copilot-instructions.md`** — update status and tool list

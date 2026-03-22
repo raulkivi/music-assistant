@@ -32,8 +32,8 @@ Install dependencies: `uv sync`
 | `src/pitch_mcp/pitch_detector.py` | librosa pYIN backend (+ optional crepe) |
 | `src/pitch_mcp/aligner.py` | Time-domain alignment, accuracy classification |
 | `src/pitch_mcp/utils.py` | Note sequence extraction, metronome map, Hz↔note conversion |
-| `HANDOVER.md` | Status, remaining work, definition of done |
-| `PLAN.md` | Architecture decisions and rationale |
+| `docs/HANDOVER.md` | Status, remaining work, definition of done |
+| `docs/PLAN.md` | Architecture decisions and rationale |
 | `docs/requirements.md` | Functional/non-functional requirements |
 | `docs/architecture.md` | Component diagram and data-flow |
 
@@ -124,7 +124,7 @@ asyncio.run(_run())
 ## Document Update Policy
 
 When you finish work or reach a milestone, update:
-1. `HANDOVER.md` — check off done items, add new gotchas
-2. `PLAN.md` — check off phase items, note changed decisions
+1. `docs/HANDOVER.md` — check off done items, add new gotchas
+2. `docs/PLAN.md` — check off phase items, note changed decisions
 3. `docs/requirements.md` — update if behaviour changed
 4. `docs/architecture.md` — update if implementation changed

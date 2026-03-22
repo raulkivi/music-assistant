@@ -1,6 +1,6 @@
 # Implementation Plan
 
-High-level roadmap for the Choir Music Assistant. Each MCP server has its own detailed `PLAN.md`
+High-level roadmap for the Choir Music Assistant. Each MCP server has its own detailed `docs/PLAN.md`
 in its directory. See [Intro.md](Intro.md) for goals, phases, and data flow.
 See [conventions.md](conventions.md) for coding standards all servers must follow.
 
@@ -22,11 +22,11 @@ See [conventions.md](conventions.md) for coding standards all servers must follo
 
 | Server | Purpose | Goals | Detail |
 |--------|---------|-------|--------|
-| **omr-mcp** | Converts sheet music images to MusicXML using deep learning OCR | 1 | [omr-mcp/PLAN.md](../omr-mcp/PLAN.md) |
-| **synth-mcp** | Synthesizes audio from MusicXML with selectable voice parts and tempo control | 3 | [synth-mcp/PLAN.md](../synth-mcp/PLAN.md) |
-| **render-mcp** | Renders MusicXML to high-quality PDF or PNG for printing and display | 2 | [render-mcp/PLAN.md](../render-mcp/PLAN.md) |
-| **musicxml-abc-mcp** | Converts between MusicXML and ABC notation so Claude can read and edit scores | LLM bridge | [musicxml-abc-mcp/PLAN.md](../musicxml-abc-mcp/PLAN.md) |
-| **pitch-mcp** | Real-time pitch detection from microphone, compared against a reference score | 4, 5, 6 | [pitch-mcp/PLAN.md](../pitch-mcp/PLAN.md) |
+| **omr-mcp** | Converts sheet music images to MusicXML using deep learning OCR | 1 | [omr-mcp/docs/PLAN.md](../omr-mcp/docs/PLAN.md) |
+| **synth-mcp** | Synthesizes audio from MusicXML with selectable voice parts and tempo control | 3 | [synth-mcp/docs/PLAN.md](../synth-mcp/docs/PLAN.md) |
+| **render-mcp** | Renders MusicXML to high-quality PDF or PNG for printing and display | 2 | [render-mcp/docs/PLAN.md](../render-mcp/docs/PLAN.md) |
+| **musicxml-abc-mcp** | Converts between MusicXML and ABC notation so Claude can read and edit scores | LLM bridge | [musicxml-abc-mcp/docs/PLAN.md](../musicxml-abc-mcp/docs/PLAN.md) |
+| **pitch-mcp** | Real-time pitch detection from microphone, compared against a reference score | 4, 5, 6 | [pitch-mcp/docs/PLAN.md](../pitch-mcp/docs/PLAN.md) |
 
 ---
 

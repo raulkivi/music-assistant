@@ -31,8 +31,8 @@ Install dependencies: `uv sync`
 | `src/omr_mcp/utils.py` | Image validation, base64 helpers |
 | `tests/test_omr.py` | Unit + integration tests |
 | `test_samples/pdmx_satb_samples/` | 10 SATB PNG + MXL ground-truth fixtures |
-| `HANDOVER.md` | Status, remaining work, definition of done |
-| `PLAN.md` | Architecture decisions and rationale |
+| `docs/HANDOVER.md` | Status, remaining work, definition of done |
+| `docs/PLAN.md` | Architecture decisions and rationale |
 | `docs/requirements.md` | Functional/non-functional requirements |
 | `docs/architecture.md` | Component diagram and data-flow |
 
@@ -107,7 +107,7 @@ asyncio.run(_run())
 ## Document Update Policy
 
 When you finish work or reach a milestone, update:
-1. `HANDOVER.md` — check off done items, add new gotchas
-2. `PLAN.md` — check off phase items, note changed decisions
+1. `docs/HANDOVER.md` — check off done items, add new gotchas
+2. `docs/PLAN.md` — check off phase items, note changed decisions
 3. `docs/requirements.md` — update if behaviour changed
 4. `docs/architecture.md` — update if implementation changed

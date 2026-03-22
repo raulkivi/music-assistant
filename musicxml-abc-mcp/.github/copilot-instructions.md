@@ -12,8 +12,8 @@ for Claude to read and edit scores directly in its context window.
 ## Before You Write Any Code
 
 Read these documents in order:
-1. **`HANDOVER.md`** — current status, remaining work, pre-flight checks, known gotchas, definition of done
-2. **`PLAN.md`** — architecture decisions and technology rationale
+1. **`docs/HANDOVER.md`** — current status, remaining work, pre-flight checks, known gotchas, definition of done
+2. **`docs/PLAN.md`** — architecture decisions and technology rationale
 3. **`docs/requirements.md`** — functional and non-functional requirements, error codes
 4. **`docs/architecture.md`** — component diagram, data-flow, module responsibilities
 
@@ -129,7 +129,7 @@ asyncio.run(_run())
 ## When You Finish Work
 
 Update these documents so the next session starts with accurate information:
-- **`HANDOVER.md`** — check off done items, add new gotchas, update status
-- **`PLAN.md`** — check off completed phase items, note changed decisions
+- **`docs/HANDOVER.md`** — check off done items, add new gotchas, update status
+- **`docs/PLAN.md`** — check off completed phase items, note changed decisions
 - **`docs/requirements.md`** — update if behaviour or interfaces changed
 - **`docs/architecture.md`** — update if implementation structure changed
