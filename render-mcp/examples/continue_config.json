@@ -1,0 +1,10 @@
+// Target path: ~/.continue/config.json
+{
+  "mcpServers": [
+    {
+      "name": "render",
+      "command": "uvx",
+      "args": ["render-mcp"]
+    }
+  ]
+}

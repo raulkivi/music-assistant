@@ -1,0 +1,11 @@
+// Target path: ~/.config/zed/settings.json
+{
+  "context_servers": {
+    "render": {
+      "command": {
+        "path": "uvx",
+        "args": ["render-mcp"]
+      }
+    }
+  }
+}
