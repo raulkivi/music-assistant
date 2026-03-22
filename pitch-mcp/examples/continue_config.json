@@ -1,0 +1,10 @@
+{
+  "//": "Place this file at: ~/.continue/config.json",
+  "mcpServers": [
+    {
+      "name": "pitch",
+      "command": "uvx",
+      "args": ["pitch-mcp"]
+    }
+  ]
+}

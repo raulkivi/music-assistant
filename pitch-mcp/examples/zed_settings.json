@@ -1,0 +1,11 @@
+{
+  "//": "Place this file at: ~/.config/zed/settings.json",
+  "context_servers": {
+    "pitch-mcp": {
+      "command": {
+        "path": "uvx",
+        "args": ["pitch-mcp"]
+      }
+    }
+  }
+}
