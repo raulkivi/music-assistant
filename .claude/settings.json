@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(for pr:*)",
+      "Bash(do echo:*)",
+      "Bash(done)",
+      "Bash(uv sync:*)",
+      "Bash(VIRTUAL_ENV= .venv/bin/pytest:*)"
+    ]
+  }
+}
