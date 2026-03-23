@@ -426,3 +426,78 @@ def _get_session(session_id: str) -> ScoreSession:
             "SESSION_NOT_FOUND",
         )
     return session
+
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+
+def health_check() -> dict:
+    """Check availability of all runtime dependencies.
+
+    Returns a structured dict with status for each subsystem:
+      - offline_analysis: librosa/pYIN (required for analyze_recording)
+      - realtime_monitoring: sounddevice + portaudio (required for start_monitoring)
+
+    Missing portaudio is a warning, not an error — offline mode still works.
+    """
+    # --- Offline analysis backend (librosa/pYIN) ---
+    librosa_ok = False
+    librosa_version = "unavailable"
+    try:
+        import librosa  # noqa: F401
+        librosa_ok = True
+        librosa_version = getattr(librosa, "__version__", "unknown")
+    except Exception:
+        pass
+
+    # --- Real-time backend (sounddevice + portaudio) ---
+    sounddevice_ok = False
+    sounddevice_version = "unavailable"
+    portaudio_ok = False
+    mic_available = False
+    try:
+        import sounddevice as sd
+        sounddevice_ok = True
+        sounddevice_version = getattr(sd, "__version__", "unknown")
+        devices = sd.query_devices()
+        portaudio_ok = True
+        mic_available = any(d["max_input_channels"] > 0 for d in devices)
+    except Exception:
+        pass
+
+    realtime_ready = sounddevice_ok and portaudio_ok
+
+    if not librosa_ok:
+        overall = "error"
+        summary = (
+            "Offline analysis backend (librosa) is not available. "
+            "Run 'uv sync' inside the pitch-mcp directory to install dependencies."
+        )
+    elif not realtime_ready:
+        overall = "degraded"
+        summary = (
+            "Offline analysis (analyze_recording) is ready. "
+            "Real-time monitoring (start_monitoring) requires libportaudio2 — "
+            "install it with: sudo apt-get install libportaudio2"
+        )
+    else:
+        overall = "ok"
+        summary = "All systems operational. Offline analysis and real-time monitoring are ready."
+
+    return {
+        "status": overall,
+        "summary": summary,
+        "offline_analysis": {
+            "available": librosa_ok,
+            "backend": "librosa/pYIN",
+            "librosa_version": librosa_version,
+        },
+        "realtime_monitoring": {
+            "available": realtime_ready,
+            "sounddevice_available": sounddevice_ok,
+            "sounddevice_version": sounddevice_version,
+            "portaudio_available": portaudio_ok,
+            "microphone_detected": mic_available,
+        },
+    }
