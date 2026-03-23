@@ -81,6 +81,42 @@ def verovio_available() -> bool:
     return _VEROVIO_AVAILABLE
 
 
+def cairosvg_available() -> bool:
+    return _CAIROSVG_AVAILABLE
+
+
+def get_health_status() -> dict:
+    """Return a status dict describing all runtime dependencies.
+
+    Safe to call at any time; no MCP imports.
+    """
+    backend = detect_backend()
+    return {
+        "server": "render-mcp",
+        "status": "ok" if backend is not None else "degraded",
+        "backend": backend,
+        "musescore_available": musescore_available(),
+        "verovio_available": verovio_available(),
+        "cairosvg_available": cairosvg_available(),
+        "notes": (
+            []
+            if backend is not None
+            else [
+                "No rendering backend found. "
+                "Install MuseScore 4 or run: uv add verovio cairosvg"
+            ]
+        )
+        + (
+            [
+                "cairosvg or libcairo2 not accessible — PNG/PDF output via Verovio "
+                "will fail. Install libcairo2 and run: uv add cairosvg"
+            ]
+            if verovio_available() and not cairosvg_available()
+            else []
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # render_to_pdf
 # ---------------------------------------------------------------------------

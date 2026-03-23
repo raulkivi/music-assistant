@@ -8,7 +8,9 @@ from mcp.types import TextContent, Tool
 
 from .engine import (
     ProcessingError,
+    cairosvg_available,
     detect_backend,
+    get_health_status,
     musescore_available,
     render_to_image,
     render_to_pdf,
@@ -91,6 +93,18 @@ async def list_tools():
         Tool(
             name="list_capabilities",
             description="List supported formats and available backends for this render server",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="health_check",
+            description=(
+                "Check whether all runtime dependencies are available and the server "
+                "is ready to render scores. Returns a human-readable status summary."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -219,16 +233,34 @@ async def call_tool(name: str, arguments: dict):
             )
         ]
 
+    elif name == "health_check":
+        status = get_health_status()
+        lines = [
+            f"render-mcp status: {status['status'].upper()}",
+            f"  Backend:   {status['backend'] or 'none'}",
+            f"  MuseScore: {'✓' if status['musescore_available'] else '✗'}",
+            f"  Verovio:   {'✓' if status['verovio_available'] else '✗'}",
+            f"  cairosvg:  {'✓' if status['cairosvg_available'] else '✗'}",
+        ]
+        if status["notes"]:
+            lines.append("")
+            lines.append("Warnings:")
+            for note in status["notes"]:
+                lines.append(f"  - {note}")
+        return [TextContent(type="text", text="\n".join(lines))]
+
     raise ValueError(f"Unknown tool: {name}")
 
 
 def main():
     """Entry point for render-mcp."""
+    logger.info("render-mcp starting…")
+
     backend = detect_backend()
     if backend is None:
         logger.warning(
             "No rendering backend available. "
-            "Install MuseScore 4 or run: pip install verovio cairosvg"
+            "Install MuseScore 4 or run: uv add verovio cairosvg"
         )
     else:
         logger.info("Active backend: %s", backend)
@@ -236,9 +268,18 @@ def main():
             from .engine import _MUSESCORE_CMD
             logger.info("MuseScore command: %s", _MUSESCORE_CMD)
         if verovio_available():
-            logger.info("Verovio available")
+            logger.info("Verovio: available")
 
-    logger.info("Starting render-mcp server…")
+    if not cairosvg_available():
+        logger.warning(
+            "cairosvg could not be imported (libcairo2 may be missing). "
+            "PNG and PDF output via Verovio will fail. "
+            "Install libcairo2 and run: uv add cairosvg"
+        )
+    else:
+        logger.info("cairosvg: available")
+
+    logger.info("render-mcp ready — use the health_check tool to verify setup")
 
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):

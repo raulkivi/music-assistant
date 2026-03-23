@@ -198,6 +198,45 @@ class TestRenderToImageValidation:
 # Misc
 # ---------------------------------------------------------------------------
 
+class TestHealthCheck:
+    async def test_health_check_registered(self):
+        tools = await list_tools()
+        names = [t.name for t in tools]
+        assert "health_check" in names
+
+    async def test_health_check_returns_text(self):
+        result = await call_tool("health_check", {})
+        assert len(result) == 1
+        assert result[0].type == "text"
+        text = result[0].text
+        assert "render-mcp status:" in text
+
+    async def test_health_check_ok_when_verovio_available(self):
+        with patch("render_mcp.engine._VEROVIO_AVAILABLE", True):
+            result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "OK" in text or "ok" in text.lower()
+
+    async def test_health_check_degraded_when_no_backend(self):
+        with (
+            patch("render_mcp.engine._MUSESCORE_CMD", None),
+            patch("render_mcp.engine._VEROVIO_AVAILABLE", False),
+        ):
+            result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "DEGRADED" in text
+
+    async def test_health_check_warns_cairosvg_missing(self):
+        with (
+            patch("render_mcp.engine._VEROVIO_AVAILABLE", True),
+            patch("render_mcp.engine._CAIROSVG_AVAILABLE", False),
+        ):
+            result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "cairosvg" in text
+        assert "Warnings:" in text
+
+
 class TestMisc:
     async def test_unknown_tool_raises(self):
         with pytest.raises(ValueError, match="Unknown tool"):
