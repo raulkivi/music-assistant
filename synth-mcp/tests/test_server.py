@@ -197,3 +197,63 @@ class TestSynthesizeValidation:
     async def test_unknown_tool_raises(self):
         with pytest.raises(ValueError, match="Unknown tool"):
             await call_tool("nonexistent_tool", {})
+
+
+# ---------------------------------------------------------------------------
+# health_check
+# ---------------------------------------------------------------------------
+
+
+class TestHealthCheck:
+    async def test_returns_text_content(self):
+        result = await call_tool("health_check", {})
+        assert len(result) == 1
+        assert result[0].type == "text"
+
+    async def test_output_contains_overall_status(self):
+        result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "Overall:" in text
+        assert "READY" in text or "NOT READY" in text
+
+    async def test_output_contains_soundfont_line(self):
+        result = await call_tool("health_check", {})
+        assert "Soundfont:" in result[0].text
+
+    async def test_soundfont_missing_when_env_unset(self, monkeypatch):
+        monkeypatch.delenv("SYNTH_SOUNDFONT_PATH", raising=False)
+        result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "MISSING" in text
+        assert "NOT READY" in text
+
+    async def test_soundfont_missing_when_path_nonexistent(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("SYNTH_SOUNDFONT_PATH", str(tmp_path / "no_such.sf2"))
+        result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "MISSING" in text
+        assert "NOT READY" in text
+
+    async def test_soundfont_ok_when_file_exists(self, monkeypatch, tmp_path):
+        sf2 = tmp_path / "test.sf2"
+        sf2.write_bytes(b"dummy")
+        monkeypatch.setenv("SYNTH_SOUNDFONT_PATH", str(sf2))
+        result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "Soundfont:    OK" in text
+
+    async def test_missing_soundfont_includes_download_hint(self, monkeypatch):
+        monkeypatch.delenv("SYNTH_SOUNDFONT_PATH", raising=False)
+        result = await call_tool("health_check", {})
+        text = result[0].text
+        assert "SYNTH_SOUNDFONT_PATH" in text
+
+    async def test_health_check_registered_in_list_tools(self):
+        tools = await list_tools()
+        names = [t.name for t in tools]
+        assert "health_check" in names
+
+    async def test_health_check_schema_has_no_required_params(self):
+        tools = await list_tools()
+        tool = next(t for t in tools if t.name == "health_check")
+        assert tool.inputSchema["required"] == []

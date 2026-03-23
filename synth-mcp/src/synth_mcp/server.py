@@ -75,6 +75,19 @@ async def list_tools():
                 "required": [],
             },
         ),
+        Tool(
+            name="health_check",
+            description=(
+                "Check whether all runtime dependencies are available and correctly configured. "
+                "Returns a human-readable status summary. Call this first to verify the server "
+                "is ready before attempting synthesis."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -199,6 +212,61 @@ async def call_tool(name: str, arguments: dict):
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
+    elif name == "health_check":
+        lines = ["synth-mcp health check\n" + "=" * 22]
+
+        # Soundfont
+        soundfont_path = os.environ.get("SYNTH_SOUNDFONT_PATH", "")
+        if not soundfont_path:
+            sf_status = "MISSING — SYNTH_SOUNDFONT_PATH is not set"
+            sf_ok = False
+        elif not os.path.exists(soundfont_path):
+            sf_status = f"MISSING — file not found at {soundfont_path!r}"
+            sf_ok = False
+        else:
+            sf_status = f"OK — {soundfont_path}"
+            sf_ok = True
+        lines.append(f"Soundfont:    {sf_status}")
+
+        if not sf_ok:
+            lines.append(
+                "\n  To fix: download an SF2 soundfont, e.g. TimGM6mb.sf2 from\n"
+                "  https://sourceforge.net/projects/timidity/files/\n"
+                "  Then add to your LLM client config:\n"
+                '    "env": {"SYNTH_SOUNDFONT_PATH": "/path/to/soundfont.sf2"}'
+            )
+
+        # FluidSynth Python binding
+        fluidsynth_ok = True
+        try:
+            import fluidsynth  # noqa: F401
+        except (ImportError, OSError) as e:
+            fluidsynth_ok = False
+            lines.append(f"FluidSynth:   MISSING — {e}")
+        if fluidsynth_ok:
+            lines.append("FluidSynth:   OK")
+
+        # music21
+        music21_ok = True
+        try:
+            import music21  # noqa: F401
+        except ImportError as e:
+            music21_ok = False
+            lines.append(f"music21:      MISSING — {e}")
+        if music21_ok:
+            lines.append("music21:      OK")
+
+        # Overall status
+        all_ok = sf_ok and fluidsynth_ok and music21_ok
+        status = "READY" if all_ok else "NOT READY"
+        lines.append(f"\nOverall:      {status}")
+        if not all_ok:
+            lines.append(
+                "Fix the issues above, then restart the server and run health_check again."
+            )
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
     raise ValueError(f"Unknown tool: {name}")
 
 
@@ -207,11 +275,18 @@ def main():
     soundfont_path = os.environ.get("SYNTH_SOUNDFONT_PATH", "")
     if not soundfont_path:
         logger.warning(
-            "SYNTH_SOUNDFONT_PATH is not set — synthesis will fail. "
-            "Download an SF2 soundfont and set the variable before calling synthesize."
+            "SYNTH_SOUNDFONT_PATH is not set — synthesis will fail.\n"
+            "  Fix: download TimGM6mb.sf2 from https://sourceforge.net/projects/timidity/files/\n"
+            "  Then add to your LLM client config under mcpServers > synth > env:\n"
+            '    "SYNTH_SOUNDFONT_PATH": "/path/to/TimGM6mb.sf2"\n'
+            "  Run the health_check tool after restarting to confirm everything is ready."
         )
     elif not os.path.exists(soundfont_path):
-        logger.warning("Soundfont not found at %r — synthesis will fail.", soundfont_path)
+        logger.warning(
+            "Soundfont not found at %r — synthesis will fail.\n"
+            "  Fix: verify the file exists at that path, or update SYNTH_SOUNDFONT_PATH.",
+            soundfont_path,
+        )
     else:
         logger.info("Soundfont: %s", soundfont_path)
 
@@ -221,7 +296,9 @@ def main():
     except (ImportError, OSError) as e:
         logger.warning("FluidSynth library not available: %s", e)
 
-    logger.info("Starting synth-mcp server…")
+    logger.info(
+        "synth-mcp started — tools: get_parts, synthesize, list_capabilities, health_check"
+    )
 
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
