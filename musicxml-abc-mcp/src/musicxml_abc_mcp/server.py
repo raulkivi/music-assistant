@@ -6,7 +6,7 @@ import mcp.server.stdio
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
-from .engine import ProcessingError, abc_to_musicxml, musicxml_to_abc, validate_abc
+from .engine import ProcessingError, abc_to_musicxml, health_check, musicxml_to_abc, validate_abc
 from .utils import validate_abc_str, validate_musicxml
 
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +87,20 @@ async def list_tools():
                 "required": [],
             },
         ),
+        Tool(
+            name="health_check",
+            description=(
+                "Check that the server and all its dependencies are working correctly. "
+                "Runs a short MusicXML → ABC → MusicXML round-trip and returns a "
+                "human-readable status summary. Ask your AI assistant to run this tool "
+                "to confirm the server is set up correctly."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -154,7 +168,7 @@ async def call_tool(name: str, arguments: dict):
             "version": "0.1.0",
             "input_formats": ["musicxml", "abc"],
             "output_formats": ["abc", "musicxml"],
-            "tools": ["musicxml_to_abc", "abc_to_musicxml", "validate_abc", "list_capabilities"],
+            "tools": ["musicxml_to_abc", "abc_to_musicxml", "validate_abc", "list_capabilities", "health_check"],
             "backend": "music21",
             "backend_version": backend_version,
             "abc_standard": "2.1",
@@ -165,12 +179,34 @@ async def call_tool(name: str, arguments: dict):
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
+    elif name == "health_check":
+        try:
+            result = health_check()
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        except Exception as e:
+            logger.error("health_check unexpected error: %s", e)
+            return _error(f"Unexpected error: {e}", "PROCESSING_FAILED")
+
     raise ValueError(f"Unknown tool: {name}")
 
 
 def main():
     """Entry point for musicxml-abc-mcp."""
-    logger.info("Starting musicxml-abc-mcp server…")
+    logger.info("musicxml-abc-mcp starting…")
+
+    try:
+        import music21
+        logger.info("music21 %s ready", music21.__version__)
+    except ImportError:
+        logger.warning(
+            "music21 is not installed — all conversion tools will fail. "
+            "Run: uv sync --extra dev"
+        )
+
+    logger.info(
+        "musicxml-abc-mcp ready. Tools: musicxml_to_abc, abc_to_musicxml, "
+        "validate_abc, list_capabilities, health_check"
+    )
 
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):

@@ -461,6 +461,83 @@ def _is_dynamic(elem) -> bool:
         return False
 
 
+def health_check() -> dict:
+    """Run a smoke test to verify all runtime dependencies are working.
+
+    Returns:
+        {
+            "status": "ok" | "degraded",
+            "checks": {
+                "music21": {"ok": bool, "version": str | None, "error": str | None},
+                "round_trip": {"ok": bool, "error": str | None},
+            },
+            "summary": "human-readable status string",
+        }
+    """
+    result: dict = {"status": "ok", "checks": {}, "summary": ""}
+
+    # Check music21 availability
+    try:
+        import music21
+        result["checks"]["music21"] = {"ok": True, "version": music21.__version__}
+    except ImportError as e:
+        result["checks"]["music21"] = {"ok": False, "version": None, "error": str(e)}
+        result["status"] = "degraded"
+
+    # Round-trip smoke test: MusicXML → ABC → MusicXML
+    if result["status"] == "ok":
+        try:
+            abc_result = musicxml_to_abc(_SMOKE_MUSICXML)
+            abc_text = abc_result.get("abc", "")
+            if not abc_text:
+                raise ValueError("musicxml_to_abc returned empty ABC")
+            mx_result = abc_to_musicxml(abc_text)
+            if not mx_result.get("musicxml") or "<score-partwise" not in mx_result["musicxml"]:
+                raise ValueError("abc_to_musicxml returned invalid MusicXML")
+            result["checks"]["round_trip"] = {"ok": True}
+        except Exception as e:
+            result["checks"]["round_trip"] = {"ok": False, "error": str(e)}
+            result["status"] = "degraded"
+
+    if result["status"] == "ok":
+        version = result["checks"]["music21"]["version"]
+        result["summary"] = (
+            f"All systems operational. music21 {version} and the custom ABC serializer "
+            "are working correctly."
+        )
+    else:
+        issues = [
+            f"{k}: {v.get('error', 'failed')}"
+            for k, v in result["checks"].items()
+            if not v.get("ok")
+        ]
+        result["summary"] = "Server is degraded: " + "; ".join(issues)
+
+    return result
+
+
+_SMOKE_MUSICXML = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Test</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>"""
+
+
 def _require_music21():
     """Raise ProcessingError if music21 is not importable."""
     try:

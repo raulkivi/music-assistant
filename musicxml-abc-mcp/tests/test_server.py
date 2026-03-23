@@ -35,7 +35,7 @@ MINIMAL_ABC = "X:1\nT:Test\nM:4/4\nL:1/8\nK:C\nCDEF GABC|]"
 
 
 class TestListTools:
-    async def test_returns_four_tools(self):
+    async def test_returns_five_tools(self):
         tools = await list_tools()
         names = {t.name for t in tools}
         assert names == {
@@ -43,6 +43,7 @@ class TestListTools:
             "abc_to_musicxml",
             "validate_abc",
             "list_capabilities",
+            "health_check",
         }
 
     async def test_musicxml_to_abc_schema(self):
@@ -90,6 +91,7 @@ class TestCallToolListCapabilities:
             "abc_to_musicxml",
             "validate_abc",
             "list_capabilities",
+            "health_check",
         }
         assert payload["backend"] == "music21"
         assert "backend_version" in payload
@@ -162,6 +164,27 @@ class TestCallToolValidateAbc:
         result = await call_tool("validate_abc", {"abc": "CDEG|]"})
         payload = json.loads(result[0].text)
         assert payload["warnings"]
+
+
+class TestCallToolHealthCheck:
+    async def test_health_check_returns_ok_status(self):
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert payload["status"] == "ok"
+        assert "checks" in payload
+        assert "summary" in payload
+        assert payload["checks"]["music21"]["ok"] is True
+        assert payload["checks"]["round_trip"]["ok"] is True
+
+    async def test_health_check_summary_mentions_music21(self):
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert "music21" in payload["summary"]
+
+    async def test_health_check_schema(self):
+        tools = await list_tools()
+        tool = next(t for t in tools if t.name == "health_check")
+        assert tool.inputSchema["required"] == []
 
 
 class TestUnknownTool:
