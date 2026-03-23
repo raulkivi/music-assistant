@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
 from omr_mcp.omr_engine import (
     recognize_image,
@@ -9,6 +10,7 @@ from omr_mcp.omr_engine import (
     recognize_images,
     _extract_musicxml_metadata,
     _merge_musicxml_pages,
+    health_check,
 )
 
 
@@ -107,6 +109,77 @@ class TestRecognizeImages:
     def test_multiple_nonexistent_files_returns_error(self):
         result = recognize_images(["/no/page1.png", "/no/page2.png"])
         assert "error" in result
+
+
+class TestHealthCheck:
+    """Tests for the health_check function."""
+
+    def test_returns_status_field(self):
+        result = health_check()
+        assert "status" in result
+        assert result["status"] in ("ok", "degraded")
+
+    def test_returns_checks_dict(self):
+        result = health_check()
+        assert "checks" in result
+        assert isinstance(result["checks"], dict)
+
+    def test_checks_include_oemer(self):
+        result = health_check()
+        assert "oemer" in result["checks"]
+        assert result["checks"]["oemer"]["status"] in ("ok", "missing")
+
+    def test_checks_include_model_cache(self):
+        result = health_check()
+        assert "model_cache" in result["checks"]
+        assert result["checks"]["model_cache"]["status"] in ("ok", "missing")
+
+    def test_overall_ok_when_all_checks_ok(self, tmp_path, monkeypatch):
+        """status == 'ok' when oemer is importable and cache dir exists."""
+        import omr_mcp.omr_engine as eng
+
+        # Pretend oemer is installed
+        fake_oemer = type("FakeOemer", (), {})()
+        import sys
+        monkeypatch.setitem(sys.modules, "oemer", fake_oemer)
+
+        # Point cache candidates at a real directory
+        monkeypatch.setattr(eng, "_OEMER_CACHE_CANDIDATES", [tmp_path])
+
+        result = health_check()
+        assert result["status"] == "ok"
+
+    def test_degraded_when_cache_missing(self, monkeypatch):
+        """status == 'degraded' when model cache directory does not exist."""
+        import omr_mcp.omr_engine as eng
+        from pathlib import Path
+        import sys
+
+        # Pretend oemer is installed
+        fake_oemer = type("FakeOemer", (), {})()
+        monkeypatch.setitem(sys.modules, "oemer", fake_oemer)
+
+        # Point cache candidates at a non-existent path
+        monkeypatch.setattr(eng, "_OEMER_CACHE_CANDIDATES", [Path("/nonexistent/oemer_cache")])
+
+        result = health_check()
+        assert result["status"] == "degraded"
+        assert result["checks"]["model_cache"]["status"] == "missing"
+        assert result["checks"]["model_cache"]["path"] is None
+
+    def test_model_cache_note_present(self, monkeypatch):
+        """Missing cache includes a helpful note about first-run download."""
+        import omr_mcp.omr_engine as eng
+        from pathlib import Path
+        import sys
+
+        fake_oemer = type("FakeOemer", (), {})()
+        monkeypatch.setitem(sys.modules, "oemer", fake_oemer)
+        monkeypatch.setattr(eng, "_OEMER_CACHE_CANDIDATES", [Path("/nonexistent/oemer_cache")])
+
+        result = health_check()
+        note = result["checks"]["model_cache"]["note"]
+        assert "100 MB" in note or "download" in note.lower()
 
 
 class TestRecognizeImageToFile:

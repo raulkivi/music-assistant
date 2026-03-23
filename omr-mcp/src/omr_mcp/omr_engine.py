@@ -9,6 +9,64 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Candidate directories where oemer stores downloaded model checkpoints.
+_OEMER_CACHE_CANDIDATES = [
+    Path.home() / ".oemer",
+    Path.home() / ".cache" / "oemer",
+]
+
+
+def health_check() -> dict[str, Any]:
+    """Check runtime dependencies and return a human-readable status summary.
+
+    Returns a dict with top-level ``status`` ("ok" or "degraded") and a
+    ``checks`` mapping with per-dependency results.  Does not import oemer
+    beyond a simple availability probe so it stays fast.
+    """
+    checks: dict[str, dict[str, Any]] = {}
+
+    # --- oemer availability ---
+    try:
+        import oemer  # noqa: F401  # type: ignore[import-untyped]
+        from importlib.metadata import version as pkg_version
+        try:
+            oemer_version = pkg_version("oemer")
+        except Exception:
+            oemer_version = "unknown"
+        checks["oemer"] = {"status": "ok", "version": oemer_version}
+    except ImportError as exc:
+        checks["oemer"] = {
+            "status": "missing",
+            "error": str(exc),
+            "hint": "Run 'uv sync' inside omr-mcp/ to install dependencies.",
+        }
+
+    # --- oemer model cache ---
+    model_cache_path: Optional[str] = None
+    for candidate in _OEMER_CACHE_CANDIDATES:
+        if candidate.exists():
+            model_cache_path = str(candidate)
+            break
+
+    if model_cache_path:
+        checks["model_cache"] = {
+            "status": "ok",
+            "path": model_cache_path,
+            "note": "Model cache found — ready to recognise sheet music.",
+        }
+    else:
+        checks["model_cache"] = {
+            "status": "missing",
+            "path": None,
+            "note": (
+                "Model cache not found. On first use oemer will download ~100 MB of "
+                "model checkpoints (this may take 5–10 minutes). Subsequent runs are fast."
+            ),
+        }
+
+    overall = "ok" if all(v["status"] == "ok" for v in checks.values()) else "degraded"
+    return {"status": overall, "checks": checks}
+
 
 def _extract_musicxml_metadata(musicxml_content: str) -> dict[str, Any]:
     """Extract metadata from MusicXML content."""
