@@ -4,7 +4,7 @@ from mcp.types import Tool, TextContent
 import json
 import logging
 
-from .omr_engine import recognize_image, recognize_image_to_file, recognize_images
+from .omr_engine import recognize_image, recognize_image_to_file, recognize_images, health_check as _engine_health_check
 from .utils import decode_base64_image, SUPPORTED_IMAGE_FORMATS
 
 # Set up logging
@@ -80,6 +80,19 @@ async def list_tools():
         Tool(
             name="list_supported_formats",
             description="(Deprecated — use list_capabilities) List supported input and output formats",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="health_check",
+            description=(
+                "Check that all runtime dependencies are available and return a "
+                "human-readable status summary. Use this to verify the server is "
+                "set up correctly, especially on first run."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -193,13 +206,61 @@ async def call_tool(name: str, arguments: dict):
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
+    elif name == "health_check":
+        result = _engine_health_check()
+        lines = [f"omr-mcp health status: {result['status'].upper()}", ""]
+        for dep, info in result["checks"].items():
+            status_icon = "✓" if info["status"] == "ok" else "✗"
+            line = f"  {status_icon} {dep}: {info['status']}"
+            if info.get("version"):
+                line += f" (v{info['version']})"
+            if info.get("path"):
+                line += f"\n      path: {info['path']}"
+            if info.get("note"):
+                line += f"\n      {info['note']}"
+            if info.get("error"):
+                line += f"\n      error: {info['error']}"
+            if info.get("hint"):
+                line += f"\n      hint: {info['hint']}"
+            lines.append(line)
+        return [TextContent(type="text", text="\n".join(lines))]
+
     raise ValueError(f"Unknown tool: {name}")
 
 def main():
     """Main entry point for the OMR MCP server."""
-    logger.info("Starting OMR MCP Server...")
     import asyncio
-    asyncio.run(mcp.server.stdio.run_server(app))
+
+    # Startup banner — visible in the LLM client's server log
+    logger.info("omr-mcp: starting OMR MCP server (sheet music → MusicXML)")
+
+    # Quick dependency probe so users see warnings before the first tool call
+    from .omr_engine import health_check as _hc
+    _status = _hc()
+    if _status["status"] == "ok":
+        logger.info("omr-mcp: all dependencies OK — ready to accept connections")
+    else:
+        for dep, info in _status["checks"].items():
+            if info["status"] != "ok":
+                if dep == "model_cache":
+                    logger.warning(
+                        "omr-mcp: oemer model cache not found — on first use, "
+                        "oemer will download ~100 MB of model checkpoints "
+                        "(this may take 5–10 minutes; subsequent runs are fast)"
+                    )
+                else:
+                    logger.warning(
+                        "omr-mcp: dependency '%s' is not available: %s",
+                        dep,
+                        info.get("error", "unknown error"),
+                    )
+        logger.info("omr-mcp: server starting in degraded state — some tools may fail")
+
+    async def _run():
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await app.run(read_stream, write_stream, app.create_initialization_options())
+
+    asyncio.run(_run())
 
 if __name__ == "__main__":
     main()
