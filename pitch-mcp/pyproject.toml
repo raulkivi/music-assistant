@@ -1,6 +1,6 @@
 [project]
 name = "pitch-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for real-time pitch detection and score alignment using microphone input"
 authors = [
     { name = "Music Assistant Contributors" },

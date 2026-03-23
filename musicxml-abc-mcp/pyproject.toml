@@ -1,6 +1,6 @@
 [project]
 name = "musicxml-abc-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server that converts between MusicXML and ABC notation for LLM-assisted score editing"
 authors = [
     { name = "Raul Kivi", email = "raulkivi@users.noreply.github.com" },

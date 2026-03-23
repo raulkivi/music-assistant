@@ -1,5 +1,7 @@
 # Setup UX Improvement Plan
 
+> **STATUS: COMPLETE** — All 32 issues (M1 + M2 + M3) resolved and merged as of 2026-03-23.
+
 Goal: make every MCP server easy to set up and use for non-technical people with their favourite LLM chat client.
 
 **Target platform: Ubuntu / Debian / Linux Mint (apt-based distros only).**
@@ -38,18 +40,20 @@ These are handled by a small per-server `install.sh` that has nothing to do with
 
 ## Current State
 
-All five servers work and have developer docs, but a non-technical person faces these blockers:
+> All blockers resolved. Deliverables shipped across 32 issues in three milestones.
 
-| Blocker | Severity |
-|---------|----------|
-| No PyPI packages — users must clone the repo and manage paths manually | High |
-| Must install `uv` manually — not a standard tool | High |
-| System libs (`libfluidsynth`, `libcairo`, `libportaudio2`) require `apt` commands | High |
-| Must download a soundfont and know the path (synth-mcp) | High |
-| No single "start here" document per server written for non-technical users | High |
-| No guidance on which LLM clients work and how to configure them | High |
-| omr-mcp silently downloads 100 MB of models on first use — looks like a hang | Medium |
-| No troubleshooting guide when things go wrong | Medium |
+~~All five servers work and have developer docs, but a non-technical person faces these blockers:~~
+
+| Blocker | Severity | Resolution |
+|---------|----------|------------|
+| ~~No PyPI packages — users must clone the repo and manage paths manually~~ | High | ✅ All five servers published to PyPI; `uvx` handles install |
+| ~~Must install `uv` manually — not a standard tool~~ | High | ✅ `install.sh` per server installs `uv` |
+| ~~System libs (`libfluidsynth`, `libcairo`, `libportaudio2`) require `apt` commands~~ | High | ✅ `install.sh` per server installs required packages |
+| ~~Must download a soundfont and know the path (synth-mcp)~~ | High | ✅ `install.sh` auto-downloads TimGM6mb.sf2; `soundfonts.md` documents alternatives |
+| ~~No single "start here" document per server written for non-technical users~~ | High | ✅ `SETUP.md` added to each server |
+| ~~No guidance on which LLM clients work and how to configure them~~ | High | ✅ `examples/` per server with Claude Desktop, Cursor, Windsurf, Continue, Zed configs |
+| ~~omr-mcp silently downloads 100 MB of models on first use — looks like a hang~~ | Medium | ✅ Progress message added via `health_check` tool and first-run output |
+| ~~No troubleshooting guide when things go wrong~~ | Medium | ✅ `TROUBLESHOOTING.md` added to each server |
 
 ---
 
@@ -216,15 +220,15 @@ Server-specific entries:
 
 ## Priority Order
 
-| Priority | Item | Why first |
-|----------|------|-----------|
-| 1 | Publish all five servers to PyPI | Eliminates the biggest UX problem (path management, cloning) |
-| 2 | GitHub Actions publish workflow | Automates future releases |
-| 3 | `<server>/install.sh` (all five) | Handles the remaining system-level setup |
-| 4 | `<server>/SETUP.md` (all five) | The human-readable guide |
-| 5 | `<server>/examples/` client configs (all five) | Copy-paste snippets per client |
-| 6 | First-run messages + `health_check` tool | Prevents "is it working?" confusion |
-| 7 | `synth-mcp/docs/soundfonts.md` + `<server>/TROUBLESHOOTING.md` | Post-install support |
+| Priority | Item | Status |
+|----------|------|--------|
+| 1 | Publish all five servers to PyPI | ✅ Done (issues #1–#5) |
+| 2 | GitHub Actions publish workflow | ✅ Done (issue #6) |
+| 3 | `<server>/install.sh` (all five) | ✅ Done (issues #7–#11) |
+| 4 | `<server>/SETUP.md` (all five) | ✅ Done (issues #12–#16) |
+| 5 | `<server>/examples/` client configs (all five) | ✅ Done (issues #17–#21) |
+| 6 | First-run messages + `health_check` tool | ✅ Done (issues #22–#26) |
+| 7 | `synth-mcp/docs/soundfonts.md` + `<server>/TROUBLESHOOTING.md` | ✅ Done (issues #27–#32) |
 
 ---
 

@@ -41,11 +41,13 @@ before writing any code.
 
 | Server | Status | Tests |
 |--------|--------|-------|
-| omr-mcp | ✅ mostly complete (integration tests pending) | 36 unit |
-| synth-mcp | ✅ Phase 1 complete | 60 unit + 7 integration |
-| render-mcp | ✅ Phase 1 complete | 68/68 incl. integration |
-| musicxml-abc-mcp | ✅ Phase 1 complete | 71/71 incl. integration |
-| pitch-mcp | ✅ Phase A+B complete | 93/93 |
+| omr-mcp | ✅ Phase 1 + UX complete (integration tests pending) | 36 unit |
+| synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
+| render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
+| musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
+| pitch-mcp | ✅ Phase A+B + UX complete | 93/93 |
+
+UX deliverables (all servers): PyPI packaging, `install.sh`, `SETUP.md`, `examples/` client configs, `health_check` tool, `TROUBLESHOOTING.md`. See [docs/SETUP_UX_PLAN.md](docs/SETUP_UX_PLAN.md).
 
 ---
 

@@ -1,6 +1,6 @@
 [project]
 name = "synth-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server that synthesizes audio from MusicXML with selectable voice parts and tempo control"
 authors = [
     {name = "Raul Kivi", email = "raulkivi@users.noreply.github.com"},
