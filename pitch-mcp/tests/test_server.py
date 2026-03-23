@@ -55,7 +55,7 @@ def _make_wav(freq_hz: float = 440.0, duration_sec: float = 1.0) -> str:
 
 
 class TestListTools:
-    async def test_returns_six_tools(self):
+    async def test_returns_seven_tools(self):
         tools = await list_tools()
         names = {t.name for t in tools}
         assert names == {
@@ -65,6 +65,7 @@ class TestListTools:
             "get_current_position",
             "stop_monitoring",
             "list_capabilities",
+            "health_check",
         }
 
     async def test_analyze_recording_schema(self):
@@ -93,6 +94,11 @@ class TestListTools:
         t = next(x for x in tools if x.name == "list_capabilities")
         assert t.inputSchema["required"] == []
 
+    async def test_health_check_no_required(self):
+        tools = await list_tools()
+        t = next(x for x in tools if x.name == "health_check")
+        assert t.inputSchema["required"] == []
+
 
 class TestListCapabilities:
     async def test_structure(self):
@@ -112,6 +118,7 @@ class TestListCapabilities:
             "get_current_position",
             "stop_monitoring",
             "list_capabilities",
+            "health_check",
         }
 
 
@@ -240,6 +247,53 @@ class TestCallToolSessionLifecycle:
         payload = json.loads(result[0].text)
         assert "error" in payload
         assert payload["error_code"] == "SESSION_NOT_FOUND"
+
+
+class TestHealthCheck:
+    async def test_returns_status_field(self):
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert "status" in payload
+        assert payload["status"] in ("ok", "degraded", "error")
+
+    async def test_returns_summary(self):
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert "summary" in payload
+        assert isinstance(payload["summary"], str)
+        assert len(payload["summary"]) > 0
+
+    async def test_offline_analysis_section(self):
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert "offline_analysis" in payload
+        oa = payload["offline_analysis"]
+        assert "available" in oa
+        assert "librosa_version" in oa
+        assert isinstance(oa["available"], bool)
+
+    async def test_realtime_monitoring_section(self):
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert "realtime_monitoring" in payload
+        rt = payload["realtime_monitoring"]
+        assert "available" in rt
+        assert "sounddevice_available" in rt
+        assert "portaudio_available" in rt
+        assert "microphone_detected" in rt
+
+    async def test_librosa_available_in_ci(self):
+        # librosa is a required dependency — it must be importable in CI
+        result = await call_tool("health_check", {})
+        payload = json.loads(result[0].text)
+        assert payload["offline_analysis"]["available"] is True
+        assert payload["status"] in ("ok", "degraded")
+
+    async def test_no_arguments_required(self):
+        # health_check should work with empty arguments dict
+        result = await call_tool("health_check", {})
+        assert len(result) == 1
+        assert result[0].type == "text"
 
 
 class TestUnknownTool:

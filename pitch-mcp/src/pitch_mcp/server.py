@@ -11,6 +11,7 @@ from .engine import (
     ProcessingError,
     analyze_recording,
     get_position,
+    health_check,
     load_score,
     start_monitoring,
     stop_monitoring,
@@ -130,6 +131,21 @@ async def list_tools():
         Tool(
             name="list_capabilities",
             description="List supported formats, tools, and backend information for this server",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="health_check",
+            description=(
+                "Check that all runtime dependencies are available and report their status. "
+                "Use this to verify the server is set up correctly. "
+                "Returns status for offline analysis (librosa/pYIN) and real-time monitoring "
+                "(sounddevice/portaudio). Missing portaudio is a warning, not an error — "
+                "offline analysis still works without it."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -260,11 +276,16 @@ async def call_tool(name: str, arguments: dict):
                 "get_current_position",
                 "stop_monitoring",
                 "list_capabilities",
+                "health_check",
             ],
             "pitch_backend": pitch_backend,
             "pitch_backend_version": pitch_backend_version,
             "microphone_available": mic_available,
         }
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    elif name == "health_check":
+        result = health_check()
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     raise ValueError(f"Unknown tool: {name}")
@@ -299,20 +320,28 @@ def _check_microphone() -> bool:
 
 def main():
     """Entry point for pitch-mcp."""
-    logger.info("Starting pitch-mcp server…")
+    logger.info("pitch-mcp starting up…")
 
-    # Log backend status
-    backend = _active_backend()
-    logger.info("Pitch detection backend: %s", backend)
-    try:
-        if backend == "aubio":
-            import aubio
-            logger.info("aubio %s available", getattr(aubio, "__version__", ""))
-        elif backend == "crepe":
-            import crepe
-            logger.info("crepe available")
-    except (ImportError, OSError) as e:
-        logger.warning("Pitch backend '%s' not available: %s", backend, e)
+    # Run health check at startup and log results
+    status = health_check()
+    if status["status"] == "ok":
+        librosa_ver = status["offline_analysis"]["librosa_version"]
+        logger.info(
+            "pitch-mcp ready — librosa %s (offline analysis) + sounddevice (real-time monitoring)",
+            librosa_ver,
+        )
+    elif status["status"] == "degraded":
+        librosa_ver = status["offline_analysis"]["librosa_version"]
+        logger.info("pitch-mcp ready — librosa %s (offline analysis only)", librosa_ver)
+        logger.warning(
+            "Real-time monitoring unavailable: sounddevice/portaudio not found. "
+            "Install libportaudio2 to enable microphone features."
+        )
+    else:
+        logger.error(
+            "pitch-mcp startup problem: %s",
+            status["summary"],
+        )
 
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
