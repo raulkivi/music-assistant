@@ -6,7 +6,7 @@ Project-level instructions for Claude Code. Read this before doing any work in t
 
 ## What this project is
 
-Five independent MCP servers for choir practice. Each server lives in its own directory, has its own Python venv, and can be deployed standalone.
+Six independent MCP servers for choir practice. Each server lives in its own directory, has its own Python venv, and can be deployed standalone.
 
 | Server | Directory | Input → Output | Goal |
 |--------|-----------|----------------|------|
@@ -15,6 +15,7 @@ Five independent MCP servers for choir practice. Each server lives in its own di
 | synth-mcp | `synth-mcp/` | MusicXML + voice → WAV | Practice audio |
 | musicxml-abc-mcp | `musicxml-abc-mcp/` | MusicXML ↔ ABC | LLM editing bridge |
 | pitch-mcp | `pitch-mcp/` | Mic audio + score → position + accuracy | Sing-along feedback |
+| comparer-mcp | `comparer-mcp/` | Two MusicXML → structured diff | Score comparison |
 
 See [README.md](README.md) for the full vision and data flow.
 
@@ -28,6 +29,7 @@ See [README.md](README.md) for the full vision and data flow.
 |--------|-------------|---------|
 | omr-mcp | [omr-mcp/CLAUDE.md](omr-mcp/CLAUDE.md) | [omr-mcp/.github/copilot-instructions.md](omr-mcp/.github/copilot-instructions.md) |
 | synth-mcp | [synth-mcp/CLAUDE.md](synth-mcp/CLAUDE.md) | [synth-mcp/.github/copilot-instructions.md](synth-mcp/.github/copilot-instructions.md) |
+| comparer-mcp | [comparer-mcp/CLAUDE.md](comparer-mcp/CLAUDE.md) | [comparer-mcp/.github/copilot-instructions.md](comparer-mcp/.github/copilot-instructions.md) |
 | render-mcp | [render-mcp/CLAUDE.md](render-mcp/CLAUDE.md) | [render-mcp/.github/copilot-instructions.md](render-mcp/.github/copilot-instructions.md) |
 | musicxml-abc-mcp | [musicxml-abc-mcp/CLAUDE.md](musicxml-abc-mcp/CLAUDE.md) | [musicxml-abc-mcp/.github/copilot-instructions.md](musicxml-abc-mcp/.github/copilot-instructions.md) |
 | pitch-mcp | [pitch-mcp/CLAUDE.md](pitch-mcp/CLAUDE.md) | [pitch-mcp/.github/copilot-instructions.md](pitch-mcp/.github/copilot-instructions.md) |
@@ -46,6 +48,7 @@ before writing any code.
 | render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
 | musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
 | pitch-mcp | ✅ Phase A+B + UX complete | 93/93 |
+| comparer-mcp | 🔲 Design complete, implementation not started | — |
 
 UX deliverables (all servers): PyPI packaging, `install.sh`, `SETUP.md`, `examples/` client configs, `health_check` tool, `TROUBLESHOOTING.md`. See [docs/SETUP_UX_PLAN.md](docs/SETUP_UX_PLAN.md).
 

@@ -147,3 +147,139 @@ class TestGroundTruthComparison:
             f"{piece_id}: measure count oemer={oemer_measures} vs ground_truth={gt_measures} "
             f"(tolerance ±{tolerance})"
         )
+
+
+# ---------------------------------------------------------------------------
+# CPDL SATB — named choir pieces with human-readable ground truth
+# ---------------------------------------------------------------------------
+
+CPDL_DIR = Path(__file__).parent.parent / "test_samples" / "cpdl_satb_samples"
+
+# (piece_name, expected_min_parts, total_pages)
+# Part expectations: SATB = 4 parts; oemer may merge SA→treble and TB→bass → allow ≥ 2.
+CPDL_PIECES = [
+    ("If_ye_love_me_-_Thomas_Tallis", 2, 1),
+    ("Ave_verum_corpus_-_William_Byrd", 2, 4),
+    ("Locus_iste_-_Bruckner", 2, 3),
+    ("Sicut_cervus_-_Palestrina", 2, 4),
+]
+
+# Single-page (only Tallis fits on one page) → full measure comparison is safe.
+CPDL_SINGLE_PAGE = [p for p in CPDL_PIECES if p[2] == 1]
+# Multi-page → test page01 only, compare part count not measures.
+CPDL_MULTI_PAGE = [p for p in CPDL_PIECES if p[2] > 1]
+
+
+def _cpdl_png(piece_name: str, page: int = 1) -> Path:
+    return CPDL_DIR / piece_name / f"{piece_name}_page{page:02d}.png"
+
+
+def _cpdl_mxl(piece_name: str) -> Path:
+    return CPDL_DIR / piece_name / f"{piece_name}.mxl"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("piece_name,min_parts,pages", CPDL_PIECES)
+class TestCPDLRecognizeImage:
+    """Basic OMR sanity on CPDL named SATB pieces: output must be valid MusicXML."""
+
+    def _skip_if_missing(self, piece_name: str) -> None:
+        if not _cpdl_png(piece_name).exists():
+            pytest.skip(f"CPDL sample not downloaded: {piece_name}")
+
+    def test_returns_musicxml_string(self, piece_name, min_parts, pages):
+        self._skip_if_missing(piece_name)
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        assert "error" not in result, f"OMR error on {piece_name}: {result.get('error')}"
+        musicxml = result.get("musicxml", "")
+        assert isinstance(musicxml, str) and musicxml
+
+    def test_musicxml_is_valid_xml(self, piece_name, min_parts, pages):
+        self._skip_if_missing(piece_name)
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        root = ET.fromstring(result["musicxml"])
+        assert root is not None
+
+    def test_has_minimum_parts(self, piece_name, min_parts, pages):
+        """oemer must detect at least the minimum expected number of staves."""
+        self._skip_if_missing(piece_name)
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        root = _strip_ns(ET.fromstring(result["musicxml"]))
+        parts = root.findall("part")
+        assert len(parts) >= min_parts, (
+            f"{piece_name}: expected ≥{min_parts} parts, got {len(parts)}"
+        )
+
+    def test_has_at_least_one_measure(self, piece_name, min_parts, pages):
+        self._skip_if_missing(piece_name)
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        root = _strip_ns(ET.fromstring(result["musicxml"]))
+        first_part = root.find("part")
+        assert first_part is not None
+        assert len(first_part.findall("measure")) >= 1
+
+    def test_metadata_fields_populated(self, piece_name, min_parts, pages):
+        self._skip_if_missing(piece_name)
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        meta = result.get("metadata", {})
+        assert meta.get("staves_detected", 0) >= 1
+        assert meta.get("measures", 0) >= 1
+        assert meta.get("processing_time_ms", 0) > 0
+        assert meta.get("engine") == "oemer"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("piece_name,min_parts,pages", CPDL_SINGLE_PAGE)
+class TestCPDLSinglePageGroundTruth:
+    """Full ground-truth comparison for single-page CPDL pieces (both parts and measures)."""
+
+    def test_part_count_matches_ground_truth(self, piece_name, min_parts, pages):
+        if not _cpdl_png(piece_name).exists():
+            pytest.skip(f"CPDL sample not downloaded: {piece_name}")
+
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        oemer_root = _strip_ns(ET.fromstring(result["musicxml"]))
+        gt_root = _read_mxl(_cpdl_mxl(piece_name))
+
+        oemer_parts = _part_count(oemer_root)
+        gt_parts = _part_count(gt_root)
+        assert abs(oemer_parts - gt_parts) <= 1, (
+            f"{piece_name}: parts oemer={oemer_parts} vs ground_truth={gt_parts}"
+        )
+
+    def test_measure_count_within_tolerance(self, piece_name, min_parts, pages):
+        if not _cpdl_png(piece_name).exists():
+            pytest.skip(f"CPDL sample not downloaded: {piece_name}")
+
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        oemer_root = _strip_ns(ET.fromstring(result["musicxml"]))
+        gt_root = _read_mxl(_cpdl_mxl(piece_name))
+
+        oemer_measures = _measure_count_first_part(oemer_root)
+        gt_measures = _measure_count_first_part(gt_root)
+
+        tolerance = max(2, int(gt_measures * 0.20))
+        assert abs(oemer_measures - gt_measures) <= tolerance, (
+            f"{piece_name}: measures oemer={oemer_measures} vs ground_truth={gt_measures} "
+            f"(tolerance ±{tolerance})"
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("piece_name,min_parts,pages", CPDL_MULTI_PAGE)
+class TestCPDLMultiPageGroundTruth:
+    """Part-count ground-truth comparison for multi-page CPDL pieces (page01 only)."""
+
+    def test_part_count_matches_ground_truth(self, piece_name, min_parts, pages):
+        if not _cpdl_png(piece_name).exists():
+            pytest.skip(f"CPDL sample not downloaded: {piece_name}")
+
+        result = recognize_image(str(_cpdl_png(piece_name)))
+        oemer_root = _strip_ns(ET.fromstring(result["musicxml"]))
+        gt_root = _read_mxl(_cpdl_mxl(piece_name))
+
+        oemer_parts = _part_count(oemer_root)
+        gt_parts = _part_count(gt_root)
+        assert abs(oemer_parts - gt_parts) <= 1, (
+            f"{piece_name} page01: parts oemer={oemer_parts} vs ground_truth={gt_parts}"
+        )
