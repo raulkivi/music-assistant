@@ -5,8 +5,10 @@
 Converts sheet music images (PNG/JPEG) to MusicXML using the `oemer` deep-learning OCR engine.
 Entry point of the choir pipeline — all other servers consume MusicXML produced here.
 
-**Status:** Phases 1–4 substantially complete. 36 unit tests pass. Integration tests written but
-not yet verified against real oemer (first run downloads ~100 MB of model checkpoints, ~10 min).
+**Status:** Phases 1–4 complete. 91 unit tests pass. Integration tests now verified against real
+oemer (2026-08-15) — required fixing a 100%-blocking API bug plus pinning `onnxruntime` and
+`opencv-python-headless`; see `docs/HANDOVER.md` for the full writeup, and "Known Gotchas" below
+for the short version.
 
 ---
 
@@ -86,6 +88,17 @@ asyncio.run(_run())
   and presence of parts/measures.
 - **The full PDMX dataset (14 GB) lives in `test_samples/pdmx_full/`** — never load or iterate
   it in tests; use `pdmx_satb_samples/` only.
+- **`.python-version` (`llm311`) is a pyenv-virtualenv name `uv` doesn't understand** — `uv sync`
+  silently falls back to whatever `python3` is on `PATH` instead of erroring. Always check
+  `.venv/bin/python --version` after `uv venv`/`uv sync`; use `uv venv --python 3.11` if it's wrong.
+- **`omr_engine.py` forces `CUDA_VISIBLE_DEVICES=""` at import time.** On this dev host,
+  onnxruntime's CUDA execution provider hard-aborts the process instead of raising a catchable
+  Python exception. Real GPU inference would need a matched onnxruntime-gpu/CUDA driver pair.
+- **`onnxruntime` and `opencv-python-headless` are pinned** in `pyproject.toml`, and
+  `onnxruntime-gpu` is excluded via `[tool.uv] override-dependencies` — oemer's own packaging
+  leaves both unpinned, and their latest releases each broke oemer's bundled ONNX models in
+  different ways (ConvTranspose shape validation; `cv2.HoughLinesP` return-shape change). Full
+  details in `docs/HANDOVER.md`.
 
 ---
 

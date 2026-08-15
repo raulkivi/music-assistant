@@ -1,3 +1,4 @@
+import os
 import time
 import re
 import shutil
@@ -9,11 +10,27 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Candidate directories where oemer stores downloaded model checkpoints.
-_OEMER_CACHE_CANDIDATES = [
-    Path.home() / ".oemer",
-    Path.home() / ".cache" / "oemer",
-]
+# oemer always prefers the CUDA execution provider on Linux/Windows when a
+# GPU is visible. onnxruntime's CUDA provider has been observed to hard-abort
+# (a native crash, not a catchable Python exception) on hosts where the
+# driver's CUDA runtime doesn't line up with the onnxruntime-gpu build.
+# Hiding the GPU makes onnxruntime fall back to CPU cleanly instead. Uses
+# setdefault so an operator who has deliberately set CUDA_VISIBLE_DEVICES is
+# still respected.
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+
+
+def _oemer_checkpoint_path() -> Optional[Path]:
+    """Return the path oemer stores its downloaded model checkpoints under.
+
+    oemer caches checkpoints inside its own installed package directory
+    (``MODULE_PATH/checkpoints/...``), not under the user's home directory.
+    """
+    try:
+        from oemer import MODULE_PATH  # type: ignore[import-untyped]
+    except ImportError:
+        return None
+    return Path(MODULE_PATH) / "checkpoints" / "unet_big" / "model.onnx"
 
 
 def health_check() -> dict[str, Any]:
@@ -42,16 +59,12 @@ def health_check() -> dict[str, Any]:
         }
 
     # --- oemer model cache ---
-    model_cache_path: Optional[str] = None
-    for candidate in _OEMER_CACHE_CANDIDATES:
-        if candidate.exists():
-            model_cache_path = str(candidate)
-            break
+    checkpoint_path = _oemer_checkpoint_path()
 
-    if model_cache_path:
+    if checkpoint_path is not None and checkpoint_path.exists():
         checks["model_cache"] = {
             "status": "ok",
-            "path": model_cache_path,
+            "path": str(checkpoint_path.parent.parent),
             "note": "Model cache found — ready to recognise sheet music.",
         }
     else:
@@ -88,10 +101,42 @@ def _extract_musicxml_metadata(musicxml_content: str) -> dict[str, Any]:
     return metadata
 
 
+def _ensure_oemer_checkpoints() -> None:
+    """Download oemer's model checkpoints on first use (~100 MB, one-time)."""
+    from oemer.ete import CHECKPOINTS_URL, download_file  # type: ignore[import-untyped]
+
+    checkpoint_path = _oemer_checkpoint_path()
+    if checkpoint_path is None or checkpoint_path.exists():
+        return
+
+    logger.info("Downloading oemer model checkpoints (first run only, ~100 MB)...")
+    module_path = checkpoint_path.parent.parent
+    for title, url in CHECKPOINTS_URL.items():
+        save_dir = "unet_big" if title.startswith("1st") else "seg_net"
+        save_path = module_path / save_dir / title.split("_")[1]
+        download_file(title, url, str(save_path))
+
+
 def _run_oemer(image_path: str) -> str:
     """Run oemer on an image and return the output path."""
-    from oemer import generate  # type: ignore[import-untyped]
-    return generate(image_path)
+    import tempfile
+    from argparse import Namespace
+    from oemer.ete import clear_data, extract  # type: ignore[import-untyped]
+
+    _ensure_oemer_checkpoints()
+
+    output_dir = tempfile.mkdtemp(prefix="oemer_")
+    args = Namespace(
+        img_path=image_path,
+        output_path=output_dir,
+        use_tf=False,
+        save_cache=False,
+        without_deskew=False,
+    )
+    # oemer keeps prediction state in module-level layers between calls —
+    # clear it first so consecutive recognitions don't see stale data.
+    clear_data()
+    return extract(args)
 
 
 def recognize_image(image_path: str) -> dict[str, Any]:

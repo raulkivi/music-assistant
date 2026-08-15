@@ -135,7 +135,7 @@ class TestHealthCheck:
         assert result["checks"]["model_cache"]["status"] in ("ok", "missing")
 
     def test_overall_ok_when_all_checks_ok(self, tmp_path, monkeypatch):
-        """status == 'ok' when oemer is importable and cache dir exists."""
+        """status == 'ok' when oemer is importable and checkpoint file exists."""
         import omr_mcp.omr_engine as eng
 
         # Pretend oemer is installed
@@ -143,14 +143,16 @@ class TestHealthCheck:
         import sys
         monkeypatch.setitem(sys.modules, "oemer", fake_oemer)
 
-        # Point cache candidates at a real directory
-        monkeypatch.setattr(eng, "_OEMER_CACHE_CANDIDATES", [tmp_path])
+        # Point the checkpoint path at a file that exists
+        checkpoint = tmp_path / "model.onnx"
+        checkpoint.write_bytes(b"fake checkpoint")
+        monkeypatch.setattr(eng, "_oemer_checkpoint_path", lambda: checkpoint)
 
         result = health_check()
         assert result["status"] == "ok"
 
     def test_degraded_when_cache_missing(self, monkeypatch):
-        """status == 'degraded' when model cache directory does not exist."""
+        """status == 'degraded' when model checkpoint file does not exist."""
         import omr_mcp.omr_engine as eng
         from pathlib import Path
         import sys
@@ -159,8 +161,10 @@ class TestHealthCheck:
         fake_oemer = type("FakeOemer", (), {})()
         monkeypatch.setitem(sys.modules, "oemer", fake_oemer)
 
-        # Point cache candidates at a non-existent path
-        monkeypatch.setattr(eng, "_OEMER_CACHE_CANDIDATES", [Path("/nonexistent/oemer_cache")])
+        # Point the checkpoint path at a non-existent file
+        monkeypatch.setattr(
+            eng, "_oemer_checkpoint_path", lambda: Path("/nonexistent/oemer_cache/model.onnx")
+        )
 
         result = health_check()
         assert result["status"] == "degraded"
@@ -175,7 +179,9 @@ class TestHealthCheck:
 
         fake_oemer = type("FakeOemer", (), {})()
         monkeypatch.setitem(sys.modules, "oemer", fake_oemer)
-        monkeypatch.setattr(eng, "_OEMER_CACHE_CANDIDATES", [Path("/nonexistent/oemer_cache")])
+        monkeypatch.setattr(
+            eng, "_oemer_checkpoint_path", lambda: Path("/nonexistent/oemer_cache/model.onnx")
+        )
 
         result = health_check()
         note = result["checks"]["model_cache"]["note"]

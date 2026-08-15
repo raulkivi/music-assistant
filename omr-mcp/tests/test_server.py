@@ -37,7 +37,7 @@ class TestServerToolSchemas:
     def test_list_tools_returns_all_tools(self):
         from omr_mcp.server import list_tools
 
-        tools = asyncio.get_event_loop().run_until_complete(list_tools())
+        tools = asyncio.run(list_tools())
         tool_names = [t.name for t in tools]
 
         assert "recognize_sheet" in tool_names
@@ -49,7 +49,7 @@ class TestServerToolSchemas:
     def test_recognize_sheet_schema(self):
         from omr_mcp.server import list_tools
         
-        tools = asyncio.get_event_loop().run_until_complete(list_tools())
+        tools = asyncio.run(list_tools())
         recognize_sheet = next(t for t in tools if t.name == "recognize_sheet")
         
         schema = recognize_sheet.inputSchema
@@ -60,7 +60,7 @@ class TestServerToolSchemas:
     def test_recognize_sheet_to_file_schema(self):
         from omr_mcp.server import list_tools
         
-        tools = asyncio.get_event_loop().run_until_complete(list_tools())
+        tools = asyncio.run(list_tools())
         tool = next(t for t in tools if t.name == "recognize_sheet_to_file")
         
         schema = tool.inputSchema
@@ -71,7 +71,7 @@ class TestServerToolSchemas:
     def test_recognize_sheets_schema(self):
         from omr_mcp.server import list_tools
 
-        tools = asyncio.get_event_loop().run_until_complete(list_tools())
+        tools = asyncio.run(list_tools())
         tool = next(t for t in tools if t.name == "recognize_sheets")
 
         schema = tool.inputSchema
@@ -82,7 +82,7 @@ class TestServerToolSchemas:
     def test_list_capabilities_tool(self):
         from omr_mcp.server import call_tool
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             call_tool("list_capabilities", {})
         )
         assert len(result) == 1
@@ -101,7 +101,7 @@ class TestServerToolSchemas:
         """Deprecated alias — should return the same payload as list_capabilities."""
         from omr_mcp.server import call_tool
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             call_tool("list_supported_formats", {})
         )
         assert len(result) == 1
@@ -115,7 +115,7 @@ class TestServerToolSchemas:
     def test_recognize_sheets_empty_list_returns_error(self):
         from omr_mcp.server import call_tool
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             call_tool("recognize_sheets", {"images": []})
         )
         data = json.loads(result[0].text)
@@ -124,7 +124,7 @@ class TestServerToolSchemas:
     def test_recognize_sheets_invalid_images_param_returns_error(self):
         from omr_mcp.server import call_tool
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             call_tool("recognize_sheets", {"images": "not-a-list"})
         )
         data = json.loads(result[0].text)
