@@ -6,7 +6,8 @@ Music-aware comparison of two MusicXML files. Provides structured, multi-level d
 from global similarity score down to individual note differences. Primary use cases:
 version/arrangement comparison, OMR quality evaluation, round-trip fidelity testing.
 
-**Status:** Pre-implementation (design complete, no source code yet).
+**Status:** Phase 1 (core comparison MVP) complete. 45/45 tests pass (43 unit + 2 integration).
+`server.py` (Phase 3, MCP tools) not yet built.
 
 ---
 
