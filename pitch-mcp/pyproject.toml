@@ -1,6 +1,6 @@
 [project]
 name = "pitch-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "MCP server for real-time pitch detection and score alignment using microphone input"
 authors = [
     { name = "Music Assistant Contributors" },
@@ -13,16 +13,15 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.28.1,<2.0.0",
     "music21>=9.0.0",
-    "librosa>=0.10.0",
+    "librosa>=1.0.0",
     "numpy>=1.24.0",
     "scipy>=1.10.0",
     "sounddevice>=0.4.0",

@@ -82,7 +82,7 @@ MXL test fixtures are in `../omr-mcp/test_samples/pdmx_satb_samples/mxl/` — 10
 - **Standard error codes:** `FILE_NOT_FOUND`, `UNSUPPORTED_FORMAT`, `INVALID_INPUT`, `PROCESSING_FAILED`, `INVALID_PARAMETER`, `SESSION_NOT_FOUND`
 - **Integration tests** → `@pytest.mark.integration`; real-mic tests → `@pytest.mark.manual`
 - **Audio callback must never do I/O or locking** — queue audio chunks to `queue.Queue` only
-- **Python 3.11+**; `asyncio_mode = "auto"` in pytest config
+- **Python 3.12+**; `asyncio_mode = "auto"` in pytest config
 
 ---
 

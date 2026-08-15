@@ -226,7 +226,7 @@ Output:
 
 ## Constraints
 
-- Language: Python 3.11+
+- Language: Python 3.12+
 - Package manager: uv
 - Score parsing: music21
 - Primary pitch detection backend: librosa pYIN (`librosa.pyin`) — pure Python, no system deps

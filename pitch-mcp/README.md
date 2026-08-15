@@ -99,7 +99,7 @@ VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual
 
 ## System requirements
 
-- Python 3.11+
+- Python 3.12+
 - `libportaudio2` — required for real-time microphone input (`start_monitoring`)
 - No system libraries required for offline analysis
 
