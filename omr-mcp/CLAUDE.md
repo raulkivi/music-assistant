@@ -5,10 +5,14 @@
 Converts sheet music images (PNG/JPEG) to MusicXML using the `oemer` deep-learning OCR engine.
 Entry point of the choir pipeline — all other servers consume MusicXML produced here.
 
-**Status:** Phases 1–4 complete. 91 unit tests pass. Integration tests now verified against real
-oemer (2026-08-15) — required fixing a 100%-blocking API bug plus pinning `onnxruntime` and
-`opencv-python-headless`; see `docs/HANDOVER.md` for the full writeup, and "Known Gotchas" below
-for the short version.
+**Status:** Phases 1–4 code complete. 91 unit tests pass. Integration tests run against real oemer
+for the first time (2026-08-15): fixing a 100%-blocking API bug plus pinning `onnxruntime` and
+`opencv-python-headless` took the suite from 0/41 to 20/41 passing. **Output quality not yet
+usable for SATB scores** — oemer reads multi-staff systems sequentially instead of simultaneously,
+so a 4-voice choir score comes out as one part with the clef alternating back and forth instead of
+4 parts sounding together; the harmonic structure is lost, confirmed by inspecting generated XML.
+2/4 CPDL images also hit further oemer-internal crashes on this specific input data. See
+`docs/HANDOVER.md` for the full writeup.
 
 ---
 
