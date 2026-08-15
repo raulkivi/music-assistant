@@ -10,12 +10,13 @@ Help choir singers digitize, practice with, and navigate sheet music using their
 4. Show the current position in the score while singing (tempo tracking)
 5. Show pitch accuracy in real time (too high / too low / on pitch)
 6. Identify where in a score a singer currently is based on a hummed or sung melody
+7. Compare two scores (editions, arrangements, OMR output vs. reference) and report structured diffs
 
 ## Delivery Phases
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| **Phase 1 — MCP Servers** | Five independent MCP servers, each covering one capability | ✅ Complete |
+| **Phase 1 — MCP Servers** | Six independent MCP servers, each covering one capability | 🔶 5 of 6 complete |
 | **Phase 2 — Web PoC** | Web app orchestrating the MCP servers for full UX validation | Planned |
 | **Phase 3 — Android App** | Native Kotlin app for rehearsal use on phones | Planned |
 
@@ -23,7 +24,7 @@ Help choir singers digitize, practice with, and navigate sheet music using their
 
 ## System Components
 
-Five MCP servers, each independently deployable from its own directory:
+Six MCP servers, each independently deployable from its own directory:
 
 | Server | Directory | Input → Output | Goals |
 |--------|-----------|----------------|-------|
@@ -32,6 +33,7 @@ Five MCP servers, each independently deployable from its own directory:
 | **synth-mcp** | [synth-mcp/](synth-mcp/) | MusicXML + voice selection → Audio (WAV) | 3 |
 | **musicxml-abc-mcp** | [musicxml-abc-mcp/](musicxml-abc-mcp/) | MusicXML ↔ ABC notation | LLM editing bridge |
 | **pitch-mcp** | [pitch-mcp/](pitch-mcp/) | Microphone audio + loaded score → position + accuracy | 4, 5, 6 |
+| **comparer-mcp** | [comparer-mcp/](comparer-mcp/) | Two MusicXML → structured diff | 7 |
 
 ### Why ABC notation?
 
@@ -67,11 +69,17 @@ Paper score
     │                                ▼
     │                            (back into pipeline)
     │
-    └──────────────────────────► [pitch-mcp]
-                                     │  loads reference score
-                                     ▲  microphone audio stream
+    ├──────────────────────────► [pitch-mcp]
+    │                                │  loads reference score
+    │                                ▲  microphone audio stream
+    │                                │
+    │                            score position + pitch accuracy    (goals 4, 5, 6)
+    │
+    └──────────────────────────► [comparer-mcp]  (also compares against any MusicXML)
+                                     │  reference score
+                                     ▲  second MusicXML (edition / arrangement / OMR output)
                                      │
-                                 score position + pitch accuracy    (goals 4, 5, 6)
+                                 structured diff                    (goal 7)
 ```
 
 ---
@@ -80,11 +88,16 @@ Paper score
 
 | Server | Status | Tests |
 |--------|--------|-------|
-| omr-mcp | ✅ Mostly complete (integration tests pending) | 36 unit |
-| synth-mcp | ✅ Phase 1 complete | 60 unit + 7 integration |
-| render-mcp | ✅ Phase 1 complete | 68/68 incl. integration |
-| musicxml-abc-mcp | ✅ Phase 1 complete | 71/71 incl. integration |
-| pitch-mcp | ✅ Phase A+B complete | 93/93 |
+| omr-mcp | ✅ Phase 1 + UX complete (integration tests pending) | 36 unit |
+| synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
+| render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
+| musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
+| pitch-mcp | ✅ Phase A+B + UX complete | 93/93 |
+| comparer-mcp | 🔲 Design complete, implementation not started | — |
+
+"UX complete" servers ship as installable PyPI packages with an `install.sh`, a non-technical
+`SETUP.md`, ready-made client configs under `examples/`, a `health_check` tool, and a
+`TROUBLESHOOTING.md` — see [docs/SETUP_UX_PLAN.md](docs/SETUP_UX_PLAN.md).
 
 ---
 
@@ -99,6 +112,7 @@ Paper score
 | Rendering | Verovio + cairosvg + pypdf | No external CLI dependency |
 | Synthesis | pyfluidsynth + music21 | In-process, no subprocess |
 | Pitch detection | librosa pYIN + sounddevice | Pure Python, excellent for singing voice |
+| Comparison | music21 | Structural / musical diffing of scores |
 | Testing | pytest + pytest-asyncio | Standard async-capable testing |
 | Phase 2 | Web app (TBD) | PoC to validate UX |
 | Phase 3 | Kotlin (Android) | Native mobile for rehearsal |
@@ -139,4 +153,5 @@ Soundfonts: `/usr/share/sounds/sf2/TimGM6mb.sf2`, `/usr/share/sounds/sf2/default
 
 - [docs/conventions.md](docs/conventions.md) — coding and structural conventions shared across all servers
 - [docs/sources.md](docs/sources.md) — references and sources
+- [docs/SETUP_UX_PLAN.md](docs/SETUP_UX_PLAN.md) — end-user packaging plan (PyPI, installers, setup docs)
 - Each server has its own `docs/` folder with `PLAN.md`, `HANDOVER.md`, `requirements.md`, and `architecture.md`
