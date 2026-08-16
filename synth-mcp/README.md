@@ -13,6 +13,7 @@ Takes a MusicXML score, optionally filters to one or more voice parts, and rende
 | `get_parts` | List all voice parts in a score — returns part name, ID, and measure count |
 | `synthesize` | Render the score (or selected parts) to a WAV file, with optional tempo adjustment |
 | `list_capabilities` | Return server metadata: backend version, soundfont status, FluidSynth availability |
+| `health_check` | Check that the soundfont, FluidSynth, and music21 are all available and ready |
 
 ## Installation
 
@@ -38,6 +39,14 @@ A soundfont (SF2) file is also required. Free options:
 | TimGM6mb | ~6 MB | Ships with Ubuntu (`/usr/share/sounds/sf2/TimGM6mb.sf2`) |
 | MuseScore General | ~200 MB | Better quality; download from musescore.org |
 | GeneralUser GS | ~30 MB | Download from schristiancollins.com |
+
+### Quick install
+
+Prefer not to do the above by hand? Run `./install.sh` — it installs `uv`, the system
+`libfluidsynth` package, and a soundfont automatically. See [SETUP.md](SETUP.md) for a
+non-technical walkthrough, and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if something goes wrong.
+Ready-made client configs (Claude Desktop, Cursor, Windsurf, Continue, Zed) are in
+[`examples/`](examples/).
 
 ## Running
 
@@ -88,11 +97,14 @@ SYNTH_SOUNDFONT_PATH=/usr/share/sounds/sf2/TimGM6mb.sf2 uv run synth-mcp
   "arguments": {
     "musicxml": "<score-partwise>...</score-partwise>",
     "output_path": "/tmp/soprano.wav",
-    "part_ids": ["P1"],
+    "part_ids": ["Soprano"],
     "tempo_factor": 0.8
   }
 }
 ```
+
+Note: `part_ids` are the part **names** returned by `get_parts` (e.g. `"Soprano"`, `"Alto"`),
+not XML `<part id>`-style values like `"P1"` — music21 uses the part name as its `id`.
 
 `tempo_factor` range: 0.25–4.0. Values below 1.0 slow down; above 1.0 speed up. Does not affect pitch.
 

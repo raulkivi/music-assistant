@@ -200,10 +200,10 @@ async def call_tool(name: str, arguments: dict):
 
         result = {
             "server": "synth-mcp",
-            "version": "0.1.0",
+            "version": "0.1.3",
             "input_formats": ["musicxml"],
             "output_formats": ["wav"],
-            "tools": ["get_parts", "synthesize", "list_capabilities"],
+            "tools": ["get_parts", "synthesize", "list_capabilities", "health_check"],
             "backend": "fluidsynth",
             "backend_version": backend_version,
             "soundfont_loaded": soundfont_loaded,

@@ -85,12 +85,13 @@ class TestListCapabilities:
         data = json.loads(result[0].text)
 
         assert data["server"] == "synth-mcp"
-        assert data["version"] == "0.1.0"
+        assert data["version"] == "0.1.3"
         assert "musicxml" in data["input_formats"]
         assert "wav" in data["output_formats"]
         assert "get_parts" in data["tools"]
         assert "synthesize" in data["tools"]
         assert "list_capabilities" in data["tools"]
+        assert "health_check" in data["tools"]
         assert data["backend"] == "fluidsynth"
         assert "soundfont_loaded" in data
         assert "fluidsynth_available" in data
