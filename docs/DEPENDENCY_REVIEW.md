@@ -96,7 +96,7 @@ in maintenance with security fixes, so staying on `<2.0.0` is safe for now.
 (Sources: [migration guide](https://py.sdk.modelcontextprotocol.io/migration/),
 [v2.0.0 release notes](https://github.com/modelcontextprotocol/python-sdk/releases/tag/v2.0.0))
 
-### `librosa` 0.11.0 → 1.0.0 (pitch-mcp) — **upgraded 2026-08-15**
+### `librosa` 0.11.0 → 1.0.0 (pitch-mcp) — **already at 1.0.0, verified working**
 
 1.0.0 (2026-08-11) is explicitly an API-stabilization release, not a rewrite. Breaking changes are
 all expired deprecations pitch-mcp doesn't touch: removed `audioread` backend (soundfile already
@@ -108,12 +108,12 @@ the two calls this server actually makes — are unaffected.
 Relevant improvements: "improved accuracy for yin/pyin implementations," Viterbi-decoder
 acceleration (pYIN's decode step), NumPy 2.0 and Python 3.14 support.
 
-**Unplanned consequence:** `librosa==1.0.0` requires Python `>=3.12`, but pitch-mcp declared
-`requires-python = ">=3.11"`. This review didn't check the transitive Python floor. Resolved by
-dropping Python 3.11 support for pitch-mcp only (`requires-python` now `>=3.12`, classifiers and
-docs updated) — the other five servers are unaffected. Bumped `librosa>=0.10.0` → `>=1.0.0`,
-ran `uv sync`, full 100/100 unit suite passed, and a manual `librosa.pyin` smoke test against a
-synthetic 440 Hz tone confirmed accurate pitch detection with no deprecation warnings.
+Turned out `pyproject.toml` already declares `librosa>=1.0.0` (committed in `45cd0b4`, the
+pitch-mcp v0.2.0 release) — this predates this review and wasn't something done as part of it.
+Verified directly: `uv sync --all-extras` installs librosa 1.0.0 into `.venv`, and the full
+non-manual suite passes — **112 unit + 4 integration = 116 passed, 0 failed**. `requires-python`
+is currently `>=3.12` in this file; whether that was changed specifically for librosa 1.0's Python
+floor wasn't established here — treat that as unverified, not as a fact.
 
 ### `onnxruntime` (formerly pinned as `onnxruntime-gpu`) 1.18.1 → 1.28.0 (omr-mcp) — **stay pinned**
 
