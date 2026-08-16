@@ -92,7 +92,7 @@ Paper score
 | synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
 | render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
 | musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
-| pitch-mcp | ✅ Phase A+B + UX complete | 93/93 |
+| pitch-mcp | ✅ Phase A+B + UX complete (audio-driven position tracking, DTW via dtaidistance) | 112 unit + 4 integration |
 | comparer-mcp | 🔲 Design complete, implementation not started | — |
 
 "UX complete" servers ship as installable PyPI packages with an `install.sh`, a non-technical

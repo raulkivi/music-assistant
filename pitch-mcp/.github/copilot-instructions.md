@@ -6,7 +6,9 @@ Real-time pitch detection from microphone input compared against a reference Mus
 Reports current score position (measure + beat), pitch accuracy in cents, and sharp/flat/on-pitch
 status while a singer sings. This is the most complex server in the project — it is stateful.
 
-**Status:** Phase A (offline analysis) + Phase B (real-time skeleton) complete. 93/93 tests pass.
+**Status:** Phase A (offline analysis) + Phase B (real-time, audio-driven position tracking)
+complete. 112 unit + 4 integration tests pass (`-m integration`); 2 manual mic tests
+(`-m manual`) require real hardware.
 
 ---
 
@@ -30,14 +32,19 @@ pitch-mcp/
 │   ├── server.py            # MCP tool definitions and async handlers
 │   ├── engine.py            # Session management, offline/real-time orchestration — NO mcp imports
 │   ├── pitch_detector.py    # librosa pYIN backend (+ optional crepe)
-│   ├── aligner.py           # Time-domain alignment, accuracy classification
+│   ├── aligner.py           # DTW (dtaidistance) alignment, accuracy classification
 │   └── utils.py             # Note sequence extraction, metronome map, Hz↔note conversion
 ├── tests/
+│   ├── conftest.py          # skips @integration/@manual unless requested via -m
 │   ├── test_server.py       # protocol tests
-│   ├── test_engine.py       # unit + integration tests
+│   ├── test_engine.py       # unit tests
+│   ├── test_aligner.py      # unit tests
+│   ├── test_pitch_detector.py  # unit tests
 │   ├── test_utils.py        # unit tests
+│   ├── test_integration.py  # @pytest.mark.integration, runs against the fixture pair
+│   ├── test_manual.py       # @pytest.mark.manual, requires a real microphone
 │   └── fixtures/
-│       ├── soprano_phrase.wav    # short vocal recording for offline tests
+│       ├── soprano_phrase.wav   # synthetic sine-tone proxy — not a real recording, see fixtures/README.md
 │       ├── reference.musicxml   # matching score
 │       └── README.md
 └── docs/
@@ -89,10 +96,10 @@ MXL test fixtures are in `../omr-mcp/test_samples/pdmx_satb_samples/mxl/` — 10
 ## Running Tests
 
 ```bash
-# Unit + integration tests (fast, no mic needed)
+# Unit tests only (fast, no mic needed) — integration/manual are skipped by default
 VIRTUAL_ENV= .venv/bin/pytest tests/ -v
 
-# Integration tests only
+# Integration tests only (offline analysis against the committed fixture pair)
 VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration
 
 # Manual tests (real mic — skip in CI)
@@ -135,6 +142,13 @@ asyncio.run(_run())
 - **Accuracy thresholds:** on_pitch = ±25 cents; sharp = >+25 cents; flat = <−25 cents.
 - **Session cleanup:** `stop_monitoring` must delete the session — a second call must return
   `SESSION_NOT_FOUND`.
+- **DTW always assigns every note ≥1 frame.** `aligner.align`'s `dtaidistance.dtw.warping_path`
+  call is full-coverage, so a note the singer never attempted still gets forced onto some frame —
+  compensated with a temporal-plausibility gate afterward. Don't remove that gate without keeping
+  `no_signal` behavior for unsung notes.
+- **Phase B position is audio-driven, not wall-clock.** `ScoreSession._process_pitch_frame` /
+  `_find_best_note_index` pick the current note by pitch match within a forward lookahead, not
+  purely by elapsed time. `_note_idx` must never move backward.
 
 ---
 

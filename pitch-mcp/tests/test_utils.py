@@ -6,6 +6,7 @@ import pytest
 
 from pitch_mcp.utils import (
     classify_accuracy,
+    extract_nominal_tempo_bpm,
     extract_note_sequence,
     hz_to_note,
     note_name_to_hz,
@@ -223,3 +224,19 @@ class TestExtractNoteSequence:
     def test_invalid_part_id_raises(self):
         with pytest.raises(ValueError, match="not found"):
             extract_note_sequence(MINIMAL_MUSICXML, "Bass")
+
+
+class TestExtractNominalTempoBpm:
+    def test_reads_metronome_mark(self):
+        assert extract_nominal_tempo_bpm(MINIMAL_MUSICXML) == pytest.approx(120.0)
+
+    def test_defaults_to_120_when_no_mark(self):
+        no_tempo_xml = MINIMAL_MUSICXML.replace(
+            "<direction placement=\"above\">\n"
+            "        <direction-type>\n"
+            "          <metronome><beat-unit>quarter</beat-unit><per-minute>120</per-minute></metronome>\n"
+            "        </direction-type>\n"
+            "      </direction>\n",
+            "",
+        )
+        assert extract_nominal_tempo_bpm(no_tempo_xml) == pytest.approx(120.0)

@@ -254,7 +254,9 @@ Unit tests MUST cover:
 - Unknown session ID error
 - `list_capabilities` response schema
 
-Unit tests MUST mock sounddevice and dtaidistance.
+Unit tests MUST mock sounddevice (no real audio hardware in CI). `dtaidistance` is pure-Python-
+compatible and deterministic, so alignment unit tests run it directly rather than mocking it —
+that's what actually exercises the DTW correctness this module depends on.
 
 ### TR-2 — Integration tests
 

@@ -266,7 +266,7 @@ async def call_tool(name: str, arguments: dict):
 
         result = {
             "server": "pitch-mcp",
-            "version": "0.1.0",
+            "version": "0.2.0",
             "input_formats": ["musicxml", "wav"],
             "output_formats": ["json"],
             "tools": [
@@ -293,14 +293,14 @@ async def call_tool(name: str, arguments: dict):
 
 def _active_backend() -> str:
     import os
-    return os.environ.get("PITCH_BACKEND", "aubio").lower()
+    return os.environ.get("PITCH_BACKEND", "librosa").lower()
 
 
 def _backend_version(backend: str) -> str:
     try:
-        if backend == "aubio":
-            import aubio
-            return getattr(aubio, "__version__", "unknown")
+        if backend == "librosa":
+            import librosa
+            return getattr(librosa, "__version__", "unknown")
         elif backend == "crepe":
             import crepe
             return getattr(crepe, "__version__", "unknown")

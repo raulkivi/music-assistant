@@ -51,57 +51,52 @@ def align(
 
     if not detected:
         # No audio — every note is "no_signal"
-        return [
-            {
-                "measure": n["measure"],
-                "beat": n["beat"],
-                "expected": n["note_name"],
-                "expected_hz": round(n["freq_hz"], 2),
-                "sung_hz": None,
-                "accuracy_cents": None,
-                "status": "no_signal",
-            }
-            for n in note_sequence
-        ]
+        return [_no_signal_result(n) for n in note_sequence]
 
     # --- Step 1: Build query and reference sequences in MIDI space ---
-    query_times = np.array([t for t, f, c in detected], dtype=np.float32)
-    query_hz = np.array([f for t, f, c in detected], dtype=np.float32)
+    query_times = np.array([t for t, f, c in detected], dtype=np.float64)
+    query_hz = np.array([f for t, f, c in detected], dtype=np.float64)
     query_midi = _hz_to_midi_continuous(query_hz)  # fractional MIDI numbers
 
-    ref_midis = np.array([n["midi"] for n in note_sequence], dtype=np.float32)
+    ref_midis = np.array([n["midi"] for n in note_sequence], dtype=np.float64)
 
     # --- Step 2: DTW alignment ---
-    # Use time-domain alignment: for each reference note, find which detected
-    # frames fall within its expected time window (fast, no heavy DTW needed
-    # for the offline case with proper timestamps).
+    # dtaidistance finds the pitch-optimal monotonic mapping between the
+    # reference note sequence and every detected frame, banded by `window`
+    # frames. Unlike a fixed per-note time window, this lets a frame near a
+    # note boundary go to whichever neighbor it actually matches in pitch,
+    # so real tempo drift (rubato, hesitation) no longer misattributes
+    # frames to the wrong note.
+    from dtaidistance import dtw
+
+    path = dtw.warping_path(ref_midis, query_midi, window=window)
+
+    frame_indices_by_note: list[list[int]] = [[] for _ in note_sequence]
+    for ref_idx, query_idx in path:
+        frame_indices_by_note[ref_idx].append(query_idx)
+
+    # --- Step 3: Per-note accuracy, gated by temporal plausibility ---
+    # DTW always assigns every reference note at least one frame (it's a
+    # full-coverage alignment), even when the singer never actually
+    # attempted that note. A note whose assigned frames land nowhere near
+    # its own expected time window is not a real signal — report it as
+    # such rather than a spurious pitch reading.
     results: list[dict] = []
+    for note, frame_idxs in zip(note_sequence, frame_indices_by_note):
+        start, end = note["start_sec"], note["end_sec"]
+        margin = max(0.15, (end - start) * 0.75)
 
-    for note in note_sequence:
-        start = note["start_sec"]
-        end = note["end_sec"]
+        frame_times = query_times[frame_idxs]
+        frame_hz = query_hz[frame_idxs]
+        median_time = float(np.median(frame_times))
+        plausible = (start - margin) <= median_time <= (end + margin)
 
-        # Find detected frames within this note's time window (±10% tolerance)
-        margin = max(0.05, (end - start) * 0.1)
-        mask = (query_times >= start - margin) & (query_times <= end + margin)
-        frames_hz = query_hz[mask]
-
-        if len(frames_hz) == 0:
-            results.append(
-                {
-                    "measure": note["measure"],
-                    "beat": note["beat"],
-                    "expected": note["note_name"],
-                    "expected_hz": round(note["freq_hz"], 2),
-                    "sung_hz": None,
-                    "accuracy_cents": None,
-                    "status": "no_signal",
-                }
-            )
+        if not plausible:
+            results.append(_no_signal_result(note))
             continue
 
         # Compute median frequency (robust to outliers)
-        sung_hz = float(np.median(frames_hz))
+        sung_hz = float(np.median(frame_hz))
         accuracy_cents = _hz_to_cents_deviation(sung_hz, note["freq_hz"])
         status = _classify(accuracy_cents)
 
@@ -118,6 +113,18 @@ def align(
         )
 
     return results
+
+
+def _no_signal_result(note: dict) -> dict:
+    return {
+        "measure": note["measure"],
+        "beat": note["beat"],
+        "expected": note["note_name"],
+        "expected_hz": round(note["freq_hz"], 2),
+        "sung_hz": None,
+        "accuracy_cents": None,
+        "status": "no_signal",
+    }
 
 
 def _hz_to_midi_continuous(hz_array: np.ndarray) -> np.ndarray:

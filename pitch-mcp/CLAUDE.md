@@ -6,7 +6,9 @@ Real-time pitch detection from microphone input compared against a reference Mus
 Reports current score position (measure + beat), pitch accuracy in cents, and sharp/flat/on-pitch
 status while a singer sings.
 
-**Status:** Phase A (offline analysis) + Phase B (real-time skeleton) complete. 93/93 tests pass.
+**Status:** Phase A (offline analysis) + Phase B (real-time, audio-driven position tracking)
+complete. 112 unit + 4 integration tests pass (`-m integration`); 2 manual mic tests
+(`-m manual`) require real hardware.
 
 ---
 
@@ -14,9 +16,9 @@ status while a singer sings.
 
 ```bash
 # From this directory
-VIRTUAL_ENV= .venv/bin/pytest tests/ -v              # 93 unit + integration tests
-VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration  # offline analysis with fixture
-VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual    # real mic tests — skip in CI
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v                 # 112 unit tests (integration/manual skipped by default)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration   # offline analysis against the committed fixture pair
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual        # real mic tests — skip in CI
 ```
 
 Install dependencies: `uv sync`
@@ -30,7 +32,7 @@ Install dependencies: `uv sync`
 | `src/pitch_mcp/server.py` | MCP tool definitions and handlers |
 | `src/pitch_mcp/engine.py` | Session management, offline/real-time orchestration (no MCP imports) |
 | `src/pitch_mcp/pitch_detector.py` | librosa pYIN backend (+ optional crepe) |
-| `src/pitch_mcp/aligner.py` | Time-domain alignment, accuracy classification |
+| `src/pitch_mcp/aligner.py` | DTW (dtaidistance) alignment, accuracy classification |
 | `src/pitch_mcp/utils.py` | Note sequence extraction, metronome map, Hz↔note conversion |
 | `docs/HANDOVER.md` | Status, remaining work, definition of done |
 | `docs/PLAN.md` | Architecture decisions and rationale |

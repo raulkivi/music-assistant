@@ -21,6 +21,7 @@ Supports both offline analysis of pre-recorded audio and real-time microphone in
 | `get_current_position` | Poll the current score position and pitch accuracy |
 | `stop_monitoring` | Stop the microphone and return a session summary |
 | `list_capabilities` | Return server metadata: pitch backend, microphone availability |
+| `health_check` | Check that runtime dependencies (librosa, sounddevice/portaudio) are available |
 
 ## Installation
 
@@ -35,6 +36,11 @@ For real-time monitoring (`start_monitoring`), PortAudio is required:
 # Ubuntu / Debian
 sudo apt install libportaudio2
 ```
+
+**Quick install:** on Ubuntu/Debian/Linux Mint, `bash install.sh` handles `uv` and the optional
+`libportaudio2` install for you — see [SETUP.md](SETUP.md) for the full non-technical walkthrough.
+Ready-made client configs (Claude Desktop, Cursor, Windsurf, Continue, Zed) are in
+[`examples/`](examples/). If something goes wrong, check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Running
 
@@ -81,13 +87,14 @@ Audio must be 16-bit PCM WAV. MP3 and FLAC are not supported.
 ```bash
 # Unit tests (no microphone or audio required)
 VIRTUAL_ENV= .venv/bin/pytest tests/ -v
-
-# Integration tests (uses pre-recorded WAV files)
-VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration
-
-# Manual tests (requires a real microphone — skip in CI)
-VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual
 ```
+
+All 100 current tests are unit tests, run against mocks and synthetic (in-memory) WAV data — none
+require real audio hardware or pre-recorded fixtures.
+
+The `integration` and `manual` pytest markers are registered in `pyproject.toml` and reserved for
+future Phase B work (fixture-based offline analysis and real-microphone tests, respectively), but
+no tests are marked with them yet, so `-m integration` / `-m manual` currently select nothing.
 
 ## Dependencies
 
@@ -107,5 +114,5 @@ VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual
 
 | Phase | Status |
 |-------|--------|
-| Phase A — offline analysis | Complete (93/93 tests pass) |
-| Phase B — real-time monitoring | Session framework in place; microphone integration ready |
+| Phase A — offline analysis | Complete. DTW-based alignment (`dtaidistance`); 112 unit tests plus 4 `-m integration` tests against a committed fixture pair (`tests/fixtures/`) |
+| Phase B — real-time monitoring | Complete. Position tracking is audio-driven (matches detected pitch, not just elapsed time); `tempo_bpm` override supported. Covered by unit tests with mocked `sounddevice`; full-lifecycle `-m manual` tests exist for real-microphone verification but require real hardware to run |

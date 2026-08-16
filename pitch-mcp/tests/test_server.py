@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from scipy.io.wavfile import write as wav_write
 
-from pitch_mcp.server import app, call_tool, list_tools
+from pitch_mcp.server import _active_backend, app, call_tool, list_tools
 
 MINIMAL_MUSICXML = """\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -105,7 +105,7 @@ class TestListCapabilities:
         result = await call_tool("list_capabilities", {})
         payload = json.loads(result[0].text)
         assert payload["server"] == "pitch-mcp"
-        assert payload["version"] == "0.1.0"
+        assert payload["version"] == "0.2.0"
         assert "musicxml" in payload["input_formats"]
         assert "wav" in payload["input_formats"]
         assert "pitch_backend" in payload
@@ -294,6 +294,30 @@ class TestHealthCheck:
         result = await call_tool("health_check", {})
         assert len(result) == 1
         assert result[0].type == "text"
+
+
+class TestActiveBackend:
+    def test_default_is_librosa(self):
+        """See docs/todo.md: this defaulted to 'aubio', which isn't even a
+        project dependency, so list_capabilities reported the wrong backend
+        name and an 'unavailable' version by default."""
+        old = os.environ.pop("PITCH_BACKEND", None)
+        try:
+            assert _active_backend() == "librosa"
+        finally:
+            if old is not None:
+                os.environ["PITCH_BACKEND"] = old
+
+    async def test_list_capabilities_reports_librosa_version(self):
+        old = os.environ.pop("PITCH_BACKEND", None)
+        try:
+            result = await call_tool("list_capabilities", {})
+            payload = json.loads(result[0].text)
+            assert payload["pitch_backend"] == "librosa"
+            assert payload["pitch_backend_version"] != "unavailable"
+        finally:
+            if old is not None:
+                os.environ["PITCH_BACKEND"] = old
 
 
 class TestUnknownTool:

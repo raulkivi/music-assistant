@@ -223,6 +223,23 @@ def _note_name_to_midi(note_name: str) -> int:
     return (octave + 1) * 12 + step_map[step]
 
 
+def extract_nominal_tempo_bpm(musicxml_str: str) -> float:
+    """Return the score's tempo (BPM) at the start of the piece.
+
+    Falls back to 120 BPM if no metronome mark is present, matching
+    `_build_metronome_map`'s own default.
+    """
+    try:
+        import music21.converter
+    except ImportError as e:
+        raise RuntimeError(f"music21 is not available: {e}")
+
+    score = music21.converter.parseData(musicxml_str, format="musicxml")
+    metronome_map = _build_metronome_map(score)
+    sec_per_ql = metronome_map[0][1]
+    return 60.0 / sec_per_ql
+
+
 def _build_metronome_map(score) -> list[tuple[float, float]]:
     """Build a list of (offset_ql, seconds_per_ql) pairs for tempo changes.
 

@@ -112,7 +112,7 @@ class ScoreSession:
     """Holds state for one active monitoring session."""
 
     def __init__(self, musicxml_str: str, part_id: str):
-        from .utils import extract_note_sequence
+        from .utils import extract_nominal_tempo_bpm, extract_note_sequence
 
         self.session_id = str(uuid.uuid4())
         self.part_id = part_id
@@ -132,6 +132,11 @@ class ScoreSession:
                 f"Part '{part_id}' has no notes.", "INVALID_INPUT"
             )
 
+        try:
+            self._nominal_bpm = extract_nominal_tempo_bpm(musicxml_str)
+        except Exception:
+            self._nominal_bpm = 120.0
+
         self._stream = None
         self._audio_queue: "queue.Queue" = None
         self._worker_thread: Optional[threading.Thread] = None
@@ -141,6 +146,8 @@ class ScoreSession:
         # Current position state (updated by worker thread)
         self._current_position: Optional[dict] = None
         self._history: list[dict] = []  # all per-note results so far
+        self._note_idx = 0  # causal position pointer, never moves backward
+        self._tempo_bpm: Optional[int] = None  # set by start(); overrides score tempo
 
     @property
     def part_name(self) -> str:
@@ -176,6 +183,8 @@ class ScoreSession:
 
         self._audio_queue = queue.Queue()
         self._stop_event.clear()
+        self._note_idx = 0
+        self._tempo_bpm = tempo_bpm
 
         sample_rate = 22050
         hop_size = 512
@@ -216,12 +225,9 @@ class ScoreSession:
         import queue as queue_module
         import numpy as np
 
-        from .aligner import _hz_to_cents_deviation, _classify
-
         # Accumulate audio into a rolling buffer for YIN estimation
         buffer = np.zeros(2048, dtype=np.float32)
         chunk_count = 0
-        note_idx = 0
 
         def _yin_pitch(buf: np.ndarray, sr: int) -> tuple[float, float]:
             """Simple YIN pitch estimate. Returns (freq_hz, confidence)."""
@@ -276,39 +282,93 @@ class ScoreSession:
             chunk_count += 1
             elapsed_sec = chunk_count * hop_size / sample_rate
 
-            if freq <= 0 or confidence < 0.3 or freq < 50 or freq > 2100:
-                status = "no_signal"
-                new_pos = None
-            else:
-                # Find the note at the current elapsed time
-                while (
-                    note_idx < len(self.note_sequence) - 1
-                    and self.note_sequence[note_idx]["end_sec"] < elapsed_sec
-                ):
-                    note_idx += 1
+            self._process_pitch_frame(freq, confidence, elapsed_sec)
 
-                note = self.note_sequence[note_idx]
-                cents = _hz_to_cents_deviation(freq, note["freq_hz"])
-                status = _classify(cents)
-                new_pos = {
-                    "measure": note["measure"],
-                    "beat": note["beat"],
-                    "expected_note": note["note_name"],
-                    "sung_pitch_hz": round(freq, 2),
-                    "accuracy_cents": cents,
-                    "status": status,
-                }
+    def _find_best_note_index(self, score_time: float, freq_hz: float) -> int:
+        """Pick the note whose pitch best matches the detected frequency,
+        among notes plausible given how much score-time has elapsed.
 
+        This is what makes position tracking audio-driven rather than a pure
+        wall-clock pointer: the singer's actual pitch decides which note is
+        current, not just elapsed time. Never moves backward, and never
+        jumps further ahead than a short lookahead window, so a brief
+        mismatch can't cause a wild skip.
+        """
+        from .aligner import _hz_to_cents_deviation
+
+        n = len(self.note_sequence)
+        start_idx = self._note_idx
+        lookahead = 4
+        end_idx = min(n, start_idx + 1 + lookahead)
+
+        best_idx = start_idx
+        best_cents = None
+        for idx in range(start_idx, end_idx):
+            note = self.note_sequence[idx]
+            # Only consider notes plausible given elapsed score-time — don't
+            # let a coincidentally-matching pitch far in the future win.
+            if note["start_sec"] > score_time + 1.0:
+                break
+            cents = abs(_hz_to_cents_deviation(freq_hz, note["freq_hz"]))
+            if best_cents is None or cents < best_cents:
+                best_cents = cents
+                best_idx = idx
+
+        # If nothing nearby matched well, fall back to whatever note the
+        # timeline says we should be on, so a missed/mismatched note doesn't
+        # stall position forever.
+        if best_cents is not None and best_cents > 150:
+            timeline_idx = start_idx
+            while (
+                timeline_idx < n - 1
+                and self.note_sequence[timeline_idx]["end_sec"] < score_time
+            ):
+                timeline_idx += 1
+            if timeline_idx > best_idx:
+                best_idx = timeline_idx
+
+        return best_idx
+
+    def _process_pitch_frame(self, freq_hz: float, confidence: float, elapsed_sec: float) -> None:
+        """Update current position/history from one detected pitch frame."""
+        from .aligner import _classify, _hz_to_cents_deviation
+
+        if freq_hz <= 0 or confidence < 0.3 or freq_hz < 50 or freq_hz > 2100:
             with self._lock:
-                if new_pos is not None:
-                    self._current_position = new_pos
-                elif self._current_position is not None:
+                if self._current_position is not None:
                     self._current_position = {
                         **self._current_position,
                         "sung_pitch_hz": None,
                         "accuracy_cents": None,
                         "status": "no_signal",
                     }
+            return
+
+        # A tempo_bpm override means the singer intends to perform faster or
+        # slower than the score's written tempo — scale wall-clock time into
+        # score-time before using it to bound plausible notes (IR-4).
+        score_time = elapsed_sec
+        if self._tempo_bpm and self._nominal_bpm:
+            score_time = elapsed_sec * (self._tempo_bpm / self._nominal_bpm)
+
+        note_idx = self._find_best_note_index(score_time, freq_hz)
+        self._note_idx = note_idx
+
+        note = self.note_sequence[note_idx]
+        cents = _hz_to_cents_deviation(freq_hz, note["freq_hz"])
+        status = _classify(cents)
+        new_pos = {
+            "measure": note["measure"],
+            "beat": note["beat"],
+            "expected_note": note["note_name"],
+            "sung_pitch_hz": round(freq_hz, 2),
+            "accuracy_cents": cents,
+            "status": status,
+        }
+
+        with self._lock:
+            self._current_position = new_pos
+            self._history.append(new_pos)
 
     def get_position(self) -> dict:
         """Return the most recent position/accuracy snapshot."""

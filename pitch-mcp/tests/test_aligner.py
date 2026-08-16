@@ -129,6 +129,48 @@ class TestAlign:
         assert "accuracy_cents" in r
         assert "status" in r
 
+    def test_tempo_drift_does_not_misattribute_frames(self):
+        """A singer running consistently behind the written tempo should still
+        align correctly to each note by pitch — not bleed into the neighbor
+        the way a fixed ±10% time window did (see docs/todo.md)."""
+        notes = [
+            self._make_note("C4", 60, 261.63, 0.0, 0.3, beat=1.0),
+            self._make_note("E4", 64, 329.63, 0.3, 0.6, beat=2.0),
+        ]
+        # Singer starts ~0.25s late and stays that far behind for both notes.
+        c4_times = [0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
+        e4_times = [0.60, 0.65, 0.70, 0.75, 0.80]
+        detected = (
+            [(t, 261.63, 0.9) for t in c4_times]
+            + [(t, 329.63, 0.9) for t in e4_times]
+        )
+        result = align(detected, notes)
+        assert result[0]["status"] == "on_pitch"
+        assert result[0]["sung_hz"] == pytest.approx(261.63, abs=0.5)
+        assert result[1]["status"] == "on_pitch"
+        assert result[1]["sung_hz"] == pytest.approx(329.63, abs=0.5)
+
+    def test_note_singer_never_attempted_is_no_signal_among_others(self):
+        """A note the singer skipped entirely (with a real pause around it)
+        stays no_signal even when surrounded by correctly-sung notes — DTW
+        forces full note coverage, so this depends on the temporal
+        plausibility gate, not just an empty frame set."""
+        notes = [
+            self._make_note("C4", 60, 261.63, 0.0, 0.5, beat=1.0),
+            self._make_note("E4", 64, 329.63, 0.5, 1.0, beat=2.0),
+            self._make_note("G4", 67, 392.0, 2.0, 2.5, beat=3.0),
+        ]
+        # Middle note (E4) is skipped; singer pauses before resuming on G4.
+        detected = (
+            [(t, 261.63, 0.9) for t in [0.1, 0.2, 0.3, 0.4]]
+            + [(t, 392.0, 0.9) for t in [2.1, 2.2, 2.3, 2.4]]
+        )
+        result = align(detected, notes)
+        assert result[0]["status"] == "on_pitch"
+        assert result[1]["status"] == "no_signal"
+        assert result[1]["sung_hz"] is None
+        assert result[2]["status"] == "on_pitch"
+
 
 class TestSummarize:
     def _make_result(self, status, cents=None):

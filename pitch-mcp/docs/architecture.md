@@ -95,7 +95,9 @@ Session management and offline analysis orchestration.
 | `ScoreSession.start(tempo_bpm)` | Open sounddevice stream; spawn worker thread |
 | `ScoreSession.get_position()` | Thread-safe read of current position dict |
 | `ScoreSession.stop()` | Close stream; join worker thread; return summary |
-| `ScoreSession._worker_loop(sr, hop)` | Background thread: buffer audio → YIN pitch → update position |
+| `ScoreSession._worker_loop(sr, hop)` | Background thread: buffer audio → YIN pitch → `_process_pitch_frame` |
+| `ScoreSession._process_pitch_frame(freq, confidence, elapsed_sec)` | Per-frame update: tempo-scale elapsed time, pick the current note via `_find_best_note_index`, update `_current_position` and append to `_history` |
+| `ScoreSession._find_best_note_index(score_time, freq_hz)` | Audio-driven note selection: best pitch match among plausible upcoming notes, with a timeline fallback |
 | `load_score(musicxml, part_id)` | Create ScoreSession; store in `_sessions`; return session_id |
 | `start_monitoring(session_id, tempo_bpm)` | Call session.start() |
 | `get_position(session_id)` | Call session.get_position() |
@@ -118,7 +120,7 @@ Maps detected pitch sequence against the reference note sequence.
 
 | Function | Description |
 |----------|-------------|
-| `align(detected, note_sequence)` | Time-domain alignment; per-note accuracy |
+| `align(detected, note_sequence)` | DTW (dtaidistance) pitch-space alignment, gated by per-note temporal plausibility; per-note accuracy |
 | `summarize(results)` | Aggregate: measures covered, average cents, histogram |
 | `_hz_to_cents_deviation(sung, expected)` | `1200 * log2(sung / expected)` |
 | `_classify(cents, threshold=25)` | `"on_pitch"` / `"sharp"` / `"flat"` |
@@ -174,13 +176,24 @@ analyze_recording(audio_path, musicxml_str, part_id)
   │     → return [(time_sec, freq_hz, confidence), ...]
   │
   ├─ aligner.align(detected_pitches, note_sequence)
-  │     └─ for each ref_note in note_sequence:
-  │           margin = max(0.05, 0.05 * (end_sec - start_sec))
-  │           window = detected frames with time ∈ [start_sec - margin, end_sec + margin]
-  │           if no frames:
-  │               status = "no_signal"
+  │     ├─ ref_midis  = [note.midi for note in note_sequence]
+  │     ├─ query_midi = hz_to_midi_continuous(detected freqs)
+  │     ├─ path = dtaidistance.dtw.warping_path(ref_midis, query_midi, window=50)
+  │     │      ← pitch-optimal monotonic mapping; a frame near a note
+  │     │        boundary goes to whichever neighbor it matches in pitch,
+  │     │        not whichever neighbor's fixed time window it falls in.
+  │     │        This is what makes alignment tolerant of real tempo
+  │     │        drift/rubato (a fixed ±10% window silently assumed the
+  │     │        singer never strayed from the score's nominal tempo).
+  │     └─ for each ref_note, frames := query frames DTW assigned to it:
+  │           margin = max(0.15, 0.75 * (end_sec - start_sec))
+  │           if median(frame.time for frame in frames) not in
+  │              [start_sec - margin, end_sec + margin]:
+  │               status = "no_signal"   ← DTW always assigns every note at
+  │                                         least one frame; this gate catches
+  │                                         notes the singer never attempted
   │           else:
-  │               sung_hz = median(frame.freq for frame in window)
+  │               sung_hz = median(frame.freq for frame in frames)
   │               cents   = _hz_to_cents_deviation(sung_hz, ref_note.freq_hz)
   │               status  = _classify(cents, threshold=25)
   │           emit: {measure, beat, expected, sung_hz, accuracy_cents, status}
@@ -255,20 +268,48 @@ _worker_loop(sample_rate=22050, hop_size=512):
     ── parabolic interpolation for sub-sample accuracy ──
     freq = sample_rate / tau_est
 
-    note_index = _advance_index(freq, note_sequence)
-    ref_note = note_sequence[note_index]
-    cents = hz_to_cents_deviation(freq, ref_note.freq_hz)
-    status = classify_accuracy(cents)
+    _process_pitch_frame(freq, confidence, elapsed_sec)
+```
 
-    with _lock:
-      _current_position = {
-        measure: ref_note.measure,
-        beat: ref_note.beat,
-        expected_note: ref_note.note_name,
-        sung_pitch_hz: freq,
-        accuracy_cents: cents,
-        status: status
-      }
+`_process_pitch_frame` is what makes position tracking audio-driven rather than
+a wall-clock pointer:
+
+```
+_process_pitch_frame(freq_hz, confidence, elapsed_sec):
+  if freq_hz invalid/unvoiced:
+    current_position.status = "no_signal"; return
+
+  score_time = elapsed_sec
+  if tempo_bpm override set:
+    score_time *= tempo_bpm / nominal_bpm   ← IR-4: singer-chosen tempo,
+                                                not the score's written one
+
+  note_idx = _find_best_note_index(score_time, freq_hz)
+    ├─ scan note_sequence[_note_idx : _note_idx + 1 + lookahead(4)]
+    ├─ stop scanning once a candidate's start_sec is implausibly far
+    │  ahead of score_time (> score_time + 1.0s)
+    ├─ pick whichever candidate's expected pitch is closest to freq_hz
+    │  ← this is the audio-driven part: the sung pitch decides which
+    │    note is current, not just elapsed time
+    └─ if even the best match is a poor one (>150 cents off), fall back
+       to whatever note the timeline says we should be on, so a missed
+       note doesn't stall position forever
+  _note_idx = note_idx   ← never moves backward
+
+  ref_note = note_sequence[note_idx]
+  cents = hz_to_cents_deviation(freq_hz, ref_note.freq_hz)
+  status = classify_accuracy(cents)
+
+  with _lock:
+    _current_position = {
+      measure: ref_note.measure,
+      beat: ref_note.beat,
+      expected_note: ref_note.note_name,
+      sung_pitch_hz: freq_hz,
+      accuracy_cents: cents,
+      status: status
+    }
+    _history.append(_current_position)   ← consumed by stop()'s summary
 ```
 
 **The audio callback is minimal** — it only puts chunks into `_audio_queue` and returns immediately. All computation happens in the worker thread, keeping the PortAudio callback deadline-safe.
@@ -366,8 +407,11 @@ ScoreSession:
   _audio_queue: queue.Queue        (audio chunks)
   _stop_event: threading.Event     (signals worker to exit)
   _current_position: dict          (latest position, mutated by worker)
-  _lock: threading.Lock            (guards _current_position reads)
-  _results: list[dict]             (accumulated for summary)
+  _lock: threading.Lock            (guards _current_position/_history)
+  _history: list[dict]             (every processed frame's position; feeds stop()'s summary)
+  _note_idx: int                   (causal position pointer; never moves backward)
+  _nominal_bpm: float              (score's own tempo, from its first MetronomeMark)
+  _tempo_bpm: int | None           (start()'s override; scales elapsed time into score-time)
 ```
 
 `_current_position` is written only by the worker thread and read by `get_position()` (called from the MCP handler). Access is guarded by `_lock` to prevent torn reads.
@@ -399,6 +443,7 @@ ScoreSession:
 | `librosa` ≥0.10 | pYIN offline pitch detection |
 | `sounddevice` ≥0.4 | Real-time microphone input (requires `libportaudio2`) |
 | `music21` ≥9.0 | MusicXML parsing, note sequence extraction |
+| `dtaidistance` | Windowed DTW for `aligner.align()` |
 | `numpy` ≥1.24 | Audio buffers, DSP arithmetic |
 | `scipy` ≥1.10 | WAV file reading (crepe backend) |
 | `mcp` | MCP protocol SDK |
@@ -421,12 +466,15 @@ pitch-mcp/
 │       ├── aligner.py         ← Time-domain alignment, accuracy classification
 │       └── utils.py           ← Note sequence extraction, Hz↔note, metronome map
 └── tests/
+    ├── conftest.py         ← skips @integration/@manual unless requested via -m
     ├── test_server.py
     ├── test_engine.py
     ├── test_pitch_detector.py
     ├── test_aligner.py
     ├── test_utils.py
+    ├── test_integration.py ← @pytest.mark.integration, runs against the fixture pair
+    ├── test_manual.py      ← @pytest.mark.manual, requires a real microphone
     └── fixtures/
-        ├── soprano_phrase.wav
+        ├── soprano_phrase.wav   ← synthetic (sine-tone) proxy, not a real recording
         └── reference.musicxml
 ```
