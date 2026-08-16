@@ -2,6 +2,9 @@ import os
 import time
 import re
 import shutil
+import subprocess
+import urllib.request
+import zipfile
 import xml.etree.ElementTree as ET
 from defusedxml.ElementTree import fromstring as _fromstring  # type: ignore[import-untyped]
 from pathlib import Path
@@ -19,6 +22,13 @@ logger = logging.getLogger(__name__)
 # still respected.
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
+_AUDIVERIS_VERSION = "5.11.0"
+_AUDIVERIS_DEB_URL = (
+    f"https://github.com/Audiveris/audiveris/releases/download/"
+    f"{_AUDIVERIS_VERSION}/Audiveris-{_AUDIVERIS_VERSION}-ubuntu24.04-x86_64.deb"
+)
+_AUDIVERIS_TIMEOUT_SECONDS = 300
+
 
 def _oemer_checkpoint_path() -> Optional[Path]:
     """Return the path oemer stores its downloaded model checkpoints under.
@@ -31,6 +41,18 @@ def _oemer_checkpoint_path() -> Optional[Path]:
     except ImportError:
         return None
     return Path(MODULE_PATH) / "checkpoints" / "unet_big" / "model.onnx"
+
+
+def _audiveris_home() -> Path:
+    """Cache directory Audiveris is downloaded/extracted into on first use."""
+    override = os.environ.get("OMR_AUDIVERIS_HOME")
+    if override:
+        return Path(override)
+    return Path.home() / ".cache" / "omr-mcp" / "audiveris"
+
+
+def _audiveris_binary_path() -> Path:
+    return _audiveris_home() / "opt" / "audiveris" / "bin" / "Audiveris"
 
 
 def health_check() -> dict[str, Any]:
@@ -77,27 +99,51 @@ def health_check() -> dict[str, Any]:
             ),
         }
 
-    overall = "ok" if all(v["status"] == "ok" for v in checks.values()) else "degraded"
+    # --- Audiveris (optional alternate engine) ---
+    # Not required for the server to function (default engine is oemer), so its absence
+    # doesn't affect overall status — only oemer/model_cache are load-bearing there.
+    audiveris_binary = _audiveris_binary_path()
+    if audiveris_binary.exists():
+        checks["audiveris"] = {
+            "status": "ok",
+            "path": str(audiveris_binary),
+            "version": _AUDIVERIS_VERSION,
+            "note": "Optional alternate engine (engine=\"audiveris\") — ready to use.",
+        }
+    else:
+        checks["audiveris"] = {
+            "status": "not_installed",
+            "path": None,
+            "note": (
+                "Optional alternate engine, better suited to multi-staff (SATB) scores "
+                "than oemer. Not required — downloads automatically (~80 MB) on first use "
+                "of engine=\"audiveris\"."
+            ),
+        }
+
+    overall = "ok" if checks["oemer"]["status"] == "ok" and checks["model_cache"]["status"] == "ok" else "degraded"
     return {"status": overall, "checks": checks}
 
 
 def _extract_musicxml_metadata(musicxml_content: str) -> dict[str, Any]:
     """Extract metadata from MusicXML content."""
     metadata = {}
-    
+
     # Count staves (parts)
     staves_matches = re.findall(r'<part\s+id=', musicxml_content)
     metadata["staves_detected"] = len(staves_matches) if staves_matches else 0
-    
+
     # Count measures (in first part to avoid duplicates)
     measure_matches = re.findall(r'<measure\s+number="(\d+)"', musicxml_content)
     if measure_matches:
-        # Get unique measure numbers
+        # Count of distinct measure numbers — not max(), since not every engine numbers
+        # measures 1-indexed with no gaps (Audiveris starts at 0, which would undercount
+        # by one under max()).
         unique_measures = set(int(m) for m in measure_matches)
-        metadata["measures"] = max(unique_measures) if unique_measures else 0
+        metadata["measures"] = len(unique_measures)
     else:
         metadata["measures"] = 0
-    
+
     return metadata
 
 
@@ -139,11 +185,108 @@ def _run_oemer(image_path: str) -> str:
     return extract(args)
 
 
-def recognize_image(image_path: str) -> dict[str, Any]:
-    """Process sheet music image and return MusicXML."""
+def _ensure_audiveris_installed() -> Path:
+    """Download and extract Audiveris on first use (~80 MB download, ~190 MB extracted).
+
+    Audiveris ships as a self-contained Ubuntu .deb bundling its own JRE — extracted
+    directly with ``dpkg-deb -x`` into a user cache dir rather than a system-wide
+    ``dpkg -i``/``apt install``, so this never needs root and never touches system
+    package state (unlike system libraries the other servers depend on via apt).
+    """
+    binary = _audiveris_binary_path()
+    if binary.exists():
+        return binary
+
+    home = _audiveris_home()
+    home.mkdir(parents=True, exist_ok=True)
+    deb_path = home / "audiveris.deb"
+
+    logger.info(f"Downloading Audiveris OMR engine (first run only, ~80 MB): {_AUDIVERIS_DEB_URL}")
+    urllib.request.urlretrieve(_AUDIVERIS_DEB_URL, deb_path)
+
+    try:
+        subprocess.run(
+            ["dpkg-deb", "-x", str(deb_path), str(home)],
+            check=True, capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "'dpkg-deb' is required to install the Audiveris engine but was not found. "
+            "It ships with dpkg on Debian/Ubuntu; on other distributions, extract "
+            f"{deb_path} manually into {home}."
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to extract Audiveris package: {e.stderr}")
+    finally:
+        deb_path.unlink(missing_ok=True)
+
+    if not binary.exists():
+        raise RuntimeError(
+            f"Audiveris extraction completed but expected binary not found at {binary}"
+        )
+    return binary
+
+
+def _run_audiveris(image_path: str) -> str:
+    """Run Audiveris on an image and return the path to the exported MusicXML.
+
+    Unlike oemer, Audiveris genuinely needs adequate source resolution — it refuses
+    to process an image below ~300 DPI (interline value too small to reliably detect
+    staff lines) rather than silently degrading, so a low-resolution input surfaces
+    as a clear failure here instead of a garbled result.
+    """
+    import tempfile
+
+    binary = _ensure_audiveris_installed()
+    output_dir = tempfile.mkdtemp(prefix="audiveris_")
+
+    result = subprocess.run(
+        [str(binary), "-batch", "-export", "-output", output_dir, image_path],
+        capture_output=True, text=True, timeout=_AUDIVERIS_TIMEOUT_SECONDS,
+    )
+
+    stem = Path(image_path).stem
+    mxl_path = Path(output_dir) / f"{stem}.mxl"
+    if not mxl_path.exists():
+        # Audiveris can exit 0 even when it rejects every sheet (e.g. resolution too
+        # low), so presence of the expected output file is the real success signal,
+        # not the exit code.
+        tail = (result.stdout or "")[-800:]
+        raise RuntimeError(
+            "Audiveris did not produce output MusicXML — this usually means the image "
+            "resolution was too low for reliable staff-line detection (300+ DPI "
+            f"recommended) or no recognizable staves were found. Log tail: {tail}"
+        )
+
+    with zipfile.ZipFile(mxl_path) as z:
+        xml_names = [n for n in z.namelist() if n.endswith(".xml") and "META-INF" not in n]
+        if not xml_names:
+            raise RuntimeError(f"Audiveris output {mxl_path} has no MusicXML entry")
+        musicxml_content = z.read(xml_names[0]).decode("utf-8")
+
+    result_path = Path(output_dir) / f"{stem}.musicxml"
+    result_path.write_text(musicxml_content, encoding="utf-8")
+    return str(result_path)
+
+
+_ENGINE_RUNNERS = {
+    "oemer": _run_oemer,
+    "audiveris": _run_audiveris,
+}
+
+
+def recognize_image(image_path: str, engine: str = "oemer") -> dict[str, Any]:
+    """Process sheet music image and return MusicXML.
+
+    Args:
+        image_path: Path to a PNG/JPEG image.
+        engine: "oemer" (default) or "audiveris". Audiveris handles multi-staff (SATB)
+            scores correctly where oemer either flattens them into one part or crashes
+            outright (see docs/HANDOVER.md) — at the cost of a much larger first-use
+            download and requiring 300+ DPI source images.
+    """
     path = Path(image_path)
-    
-    # Validate input file
+
     if not path.exists():
         return {"error": f"File not found: {image_path}", "error_code": "FILE_NOT_FOUND"}
 
@@ -153,16 +296,19 @@ def recognize_image(image_path: str) -> dict[str, Any]:
             "error_code": "UNSUPPORTED_FORMAT",
         }
 
+    run_fn = _ENGINE_RUNNERS.get(engine)
+    if run_fn is None:
+        return {
+            "error": f"Unknown engine: {engine!r}. Supported engines: {sorted(_ENGINE_RUNNERS)}",
+            "error_code": "INVALID_PARAMETER",
+        }
+
     start_time = time.time()
 
     try:
-        logger.info(f"Starting OMR processing for: {path}")
+        logger.info(f"Starting OMR processing for: {path} (engine={engine})")
+        result_path = run_fn(str(path))
 
-        # Process the image
-        logger.info("Running oemer recognition...")
-        result_path = _run_oemer(str(path))
-
-        # Read the generated MusicXML
         if not Path(result_path).exists():
             return {
                 "error": f"OMR processing completed but output file not found: {result_path}",
@@ -173,8 +319,6 @@ def recognize_image(image_path: str) -> dict[str, Any]:
             musicxml_content = f.read()
 
         processing_time_ms = int((time.time() - start_time) * 1000)
-
-        # Extract metadata from MusicXML
         xml_metadata = _extract_musicxml_metadata(musicxml_content)
 
         logger.info(f"OMR processing completed successfully in {processing_time_ms}ms")
@@ -186,13 +330,14 @@ def recognize_image(image_path: str) -> dict[str, Any]:
                 "staves_detected": xml_metadata["staves_detected"],
                 "measures": xml_metadata["measures"],
                 "processing_time_ms": processing_time_ms,
-                "engine": "oemer"
+                "engine": engine,
             }
         }
 
     except ImportError as e:
+        hint = "Please install with: pip install oemer" if engine == "oemer" else str(e)
         return {
-            "error": f"oemer library not available: {str(e)}. Please install with: pip install oemer",
+            "error": f"{engine} backend not available: {str(e)}. {hint}",
             "error_code": "PROCESSING_FAILED",
         }
     except Exception as e:
@@ -204,7 +349,7 @@ def recognize_image(image_path: str) -> dict[str, Any]:
             "metadata": {
                 "source": str(path),
                 "processing_time_ms": processing_time_ms,
-                "engine": "oemer"
+                "engine": engine,
             }
         }
 
@@ -239,11 +384,12 @@ def _merge_musicxml_pages(musicxml_pages: list[str]) -> str:
     return ET.tostring(base, encoding="unicode")
 
 
-def recognize_images(image_paths: list[str]) -> dict[str, Any]:
+def recognize_images(image_paths: list[str], engine: str = "oemer") -> dict[str, Any]:
     """Process multiple sheet music images in page order and return merged MusicXML.
 
     Args:
         image_paths: Ordered list of image file paths (or base64 strings).
+        engine: "oemer" (default) or "audiveris" — see recognize_image().
 
     Returns:
         dict with 'musicxml' and 'metadata' (including 'page_count'), or 'error'.
@@ -255,7 +401,7 @@ def recognize_images(image_paths: list[str]) -> dict[str, Any]:
     errors = []
 
     for i, path in enumerate(image_paths):
-        result = recognize_image(path)
+        result = recognize_image(path, engine=engine)
         if "error" in result:
             errors.append(f"Page {i + 1} ({path}): {result['error']}")
         else:
@@ -283,16 +429,21 @@ def recognize_images(image_paths: list[str]) -> dict[str, Any]:
             "staves_detected": xml_meta["staves_detected"],
             "measures": xml_meta["measures"],
             "processing_time_ms": total_time,
-            "engine": "oemer",
+            "engine": engine,
         },
     }
 
 
-def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) -> dict[str, Any]:
-    """Process sheet music image and save MusicXML to file."""
+def recognize_image_to_file(input_path: str, output_path: Optional[str] = None, engine: str = "oemer") -> dict[str, Any]:
+    """Process sheet music image and save MusicXML to file.
+
+    Args:
+        input_path: Path to a PNG/JPEG image.
+        output_path: Path for output MusicXML file (auto-generated if omitted).
+        engine: "oemer" (default) or "audiveris" — see recognize_image().
+    """
     path = Path(input_path)
-    
-    # Validate input file
+
     if not path.exists():
         return {"error": f"File not found: {input_path}", "error_code": "FILE_NOT_FOUND"}
 
@@ -302,6 +453,13 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
             "error_code": "UNSUPPORTED_FORMAT",
         }
 
+    run_fn = _ENGINE_RUNNERS.get(engine)
+    if run_fn is None:
+        return {
+            "error": f"Unknown engine: {engine!r}. Supported engines: {sorted(_ENGINE_RUNNERS)}",
+            "error_code": "INVALID_PARAMETER",
+        }
+
     # Determine output path
     if output_path is None:
         output_path = str(path.with_suffix(".musicxml"))
@@ -309,13 +467,9 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
     start_time = time.time()
 
     try:
-        logger.info(f"Starting OMR processing for: {path}")
+        logger.info(f"Starting OMR processing for: {path} (engine={engine})")
+        result_path = run_fn(str(path))
 
-        # Process the image
-        logger.info("Running oemer recognition...")
-        result_path = _run_oemer(str(path))
-
-        # Read and copy/move to desired output path
         if not Path(result_path).exists():
             return {
                 "error": f"OMR processing completed but output file not found: {result_path}",
@@ -325,18 +479,16 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
         # Copy to output path if different
         if str(Path(result_path).resolve()) != str(Path(output_path).resolve()):
             shutil.copy2(result_path, output_path)
-        
+
         # Read content for metadata extraction
         with open(output_path, "r", encoding="utf-8") as f:
             musicxml_content = f.read()
-        
+
         processing_time_ms = int((time.time() - start_time) * 1000)
-        
-        # Extract metadata from MusicXML
         xml_metadata = _extract_musicxml_metadata(musicxml_content)
-        
+
         logger.info(f"OMR processing completed successfully in {processing_time_ms}ms")
-        
+
         return {
             "output_path": output_path,
             "metadata": {
@@ -344,13 +496,14 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
                 "staves_detected": xml_metadata["staves_detected"],
                 "measures": xml_metadata["measures"],
                 "processing_time_ms": processing_time_ms,
-                "engine": "oemer"
+                "engine": engine,
             }
         }
-        
+
     except ImportError as e:
+        hint = "Please install with: pip install oemer" if engine == "oemer" else str(e)
         return {
-            "error": f"oemer library not available: {str(e)}. Please install with: pip install oemer",
+            "error": f"{engine} backend not available: {str(e)}. {hint}",
             "error_code": "PROCESSING_FAILED",
         }
     except Exception as e:
@@ -362,6 +515,6 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
             "metadata": {
                 "source": str(path),
                 "processing_time_ms": processing_time_ms,
-                "engine": "oemer"
+                "engine": engine,
             }
         }

@@ -1,8 +1,10 @@
 import mcp.server.stdio
 from mcp.server import Server
 from mcp.types import Tool, TextContent
+import asyncio
 import json
 import logging
+import time
 
 from .omr_engine import recognize_image, recognize_image_to_file, recognize_images, health_check as _engine_health_check
 from .utils import decode_base64_image, SUPPORTED_IMAGE_FORMATS
@@ -30,6 +32,17 @@ async def list_tools():
                         "type": "string",
                         "enum": ["path", "base64"],
                         "description": "Input format hint: 'path' or 'base64' (auto-detected if omitted)"
+                    },
+                    "engine": {
+                        "type": "string",
+                        "enum": ["oemer", "audiveris"],
+                        "description": (
+                            "OMR backend to use. 'oemer' (default) is fast and works well for "
+                            "single/two-staff scores. 'audiveris' correctly separates multi-staff "
+                            "choir scores (SATB) into simultaneous parts, where oemer either "
+                            "flattens them into one part or fails outright — but requires 300+ DPI "
+                            "source images and downloads a much larger (~80 MB) engine on first use."
+                        )
                     }
                 },
                 "required": ["image"]
@@ -48,6 +61,11 @@ async def list_tools():
                     "output_path": {
                         "type": "string",
                         "description": "Path for output MusicXML file (auto-generated if omitted)"
+                    },
+                    "engine": {
+                        "type": "string",
+                        "enum": ["oemer", "audiveris"],
+                        "description": "OMR backend to use — see recognize_sheet's 'engine' parameter."
                     }
                 },
                 "required": ["input_path"]
@@ -63,6 +81,11 @@ async def list_tools():
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Ordered list of image file paths or base64-encoded images (one per page)"
+                    },
+                    "engine": {
+                        "type": "string",
+                        "enum": ["oemer", "audiveris"],
+                        "description": "OMR backend to use — see recognize_sheet's 'engine' parameter."
                     }
                 },
                 "required": ["images"]
@@ -110,15 +133,46 @@ def _detect_input_format(image: str, format_hint: str | None) -> str:
         return "base64"
     return "path"
 
+async def _run_with_progress(fn, *args, message_prefix: str, interval_seconds: float = 5.0, **kwargs):
+    """Run a blocking, long-running engine call off the event loop, emitting periodic MCP
+    progress notifications when the client supplied a progress token (PLAN.md Phase 2). oemer
+    exposes no internal progress callback, so this is an elapsed-time heartbeat, not a true
+    percentage. Also keeps the event loop responsive during the multi-minute oemer run, which a
+    direct synchronous call would otherwise block entirely."""
+    task = asyncio.create_task(asyncio.to_thread(fn, *args, **kwargs))
+
+    try:
+        ctx = app.request_context
+    except LookupError:
+        # No active MCP request context (e.g. call_tool() invoked directly, as in unit tests) —
+        # app.request_context raises rather than returning None in that case.
+        ctx = None
+    progress_token = ctx.meta.progressToken if ctx and ctx.meta else None
+    if progress_token is None:
+        return await task
+
+    start = time.monotonic()
+    tick = 0
+    while True:
+        done, _ = await asyncio.wait({task}, timeout=interval_seconds)
+        if task in done:
+            return task.result()
+        tick += 1
+        elapsed = int(time.monotonic() - start)
+        await ctx.session.send_progress_notification(
+            progress_token, progress=tick, message=f"{message_prefix} ({elapsed}s elapsed)..."
+        )
+
 @app.call_tool()
 async def call_tool(name: str, arguments: dict):
     if name == "recognize_sheet":
         image = arguments["image"]
         format_hint = arguments.get("format")
+        engine = arguments.get("engine", "oemer")
         input_format = _detect_input_format(image, format_hint)
-        
-        logger.info(f"Processing sheet music recognition (format: {input_format})")
-        
+
+        logger.info(f"Processing sheet music recognition (format: {input_format}, engine: {engine})")
+
         try:
             if input_format == "base64":
                 # Decode base64 to temporary file
@@ -130,7 +184,9 @@ async def call_tool(name: str, arguments: dict):
             else:
                 image_path = image
 
-            result = recognize_image(image_path)
+            result = await _run_with_progress(
+                recognize_image, image_path, engine=engine, message_prefix="Running OMR recognition"
+            )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
             logger.error(f"Error processing image: {str(e)}")
@@ -140,11 +196,18 @@ async def call_tool(name: str, arguments: dict):
     elif name == "recognize_sheet_to_file":
         input_path = arguments["input_path"]
         output_path = arguments.get("output_path")
+        engine = arguments.get("engine", "oemer")
 
-        logger.info(f"Processing sheet music to file: {input_path}")
+        logger.info(f"Processing sheet music to file: {input_path} (engine: {engine})")
 
         try:
-            result = recognize_image_to_file(input_path, output_path)
+            result = await _run_with_progress(
+                recognize_image_to_file,
+                input_path,
+                output_path,
+                engine=engine,
+                message_prefix="Running OMR recognition",
+            )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
             logger.error(f"Error processing image: {str(e)}")
@@ -153,11 +216,12 @@ async def call_tool(name: str, arguments: dict):
     
     elif name == "recognize_sheets":
         images = arguments.get("images", [])
+        engine = arguments.get("engine", "oemer")
         if not isinstance(images, list):
             error_result = {"error": "'images' must be a list", "error_code": "INVALID_PARAMETER"}
             return [TextContent(type="text", text=json.dumps(error_result))]
 
-        logger.info(f"Processing {len(images)} sheet music page(s)")
+        logger.info(f"Processing {len(images)} sheet music page(s) (engine: {engine})")
 
         # Resolve any base64 inputs to temp files
         resolved_paths = []
@@ -178,7 +242,12 @@ async def call_tool(name: str, arguments: dict):
             return [TextContent(type="text", text=json.dumps(error_result))]
 
         try:
-            result = recognize_images(resolved_paths)
+            result = await _run_with_progress(
+                recognize_images,
+                resolved_paths,
+                engine=engine,
+                message_prefix=f"Running OMR recognition on {len(resolved_paths)} page(s)",
+            )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
             logger.error(f"Error processing images: {str(e)}")
@@ -191,6 +260,8 @@ async def call_tool(name: str, arguments: dict):
             backend_version = pkg_version("oemer")
         except Exception:
             backend_version = "unknown"
+
+        _engine_status = _engine_health_check()["checks"].get("audiveris", {})
 
         result = {
             "server": "omr-mcp",
@@ -205,6 +276,19 @@ async def call_tool(name: str, arguments: dict):
             ],
             "backend": "oemer",
             "backend_version": backend_version,
+            "engines": {
+                "oemer": {
+                    "status": "ok",
+                    "note": "Default engine. Fast; flattens multi-staff (SATB) scores into one part.",
+                },
+                "audiveris": {
+                    "status": _engine_status.get("status", "not_installed"),
+                    "note": (
+                        "Opt-in via engine=\"audiveris\". Correctly separates SATB scores into "
+                        "simultaneous parts. Requires 300+ DPI input; downloads ~80 MB on first use."
+                    ),
+                },
+            },
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
@@ -212,7 +296,13 @@ async def call_tool(name: str, arguments: dict):
         result = _engine_health_check()
         lines = [f"omr-mcp health status: {result['status'].upper()}", ""]
         for dep, info in result["checks"].items():
-            status_icon = "✓" if info["status"] == "ok" else "✗"
+            if info["status"] == "ok":
+                status_icon = "✓"
+            elif info["status"] == "not_installed":
+                # Optional dependency (e.g. audiveris) in its expected default state — not an error.
+                status_icon = "○"
+            else:
+                status_icon = "✗"
             line = f"  {status_icon} {dep}: {info['status']}"
             if info.get("version"):
                 line += f" (v{info['version']})"
@@ -243,6 +333,10 @@ def main():
         logger.info("omr-mcp: all dependencies OK — ready to accept connections")
     else:
         for dep, info in _status["checks"].items():
+            if info["status"] == "not_installed":
+                # Optional dependency (audiveris) in its expected default state — not a
+                # degraded-state cause, so not worth a startup warning.
+                continue
             if info["status"] != "ok":
                 if dep == "model_cache":
                     logger.warning(

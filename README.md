@@ -16,7 +16,7 @@ Help choir singers digitize, practice with, and navigate sheet music using their
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| **Phase 1 — MCP Servers** | Six independent MCP servers, each covering one capability | 🔶 5 of 6 complete; omr-mcp has a known SATB bug |
+| **Phase 1 — MCP Servers** | Six independent MCP servers, each covering one capability | 🔶 5 of 6 complete; omr-mcp's default (oemer) engine has a known SATB bug, fixed via opt-in `engine="audiveris"` |
 | **Phase 2 — Web PoC** | Web app orchestrating the MCP servers for full UX validation | Planned |
 | **Phase 3 — Android App** | Native Kotlin app for rehearsal use on phones | Planned |
 
@@ -88,7 +88,7 @@ Paper score
 
 | Server | Status | Tests |
 |--------|--------|-------|
-| omr-mcp | ⚠️ Phase 1 + UX code complete; 20/41 integration — SATB output loses voice structure | 91 unit |
+| omr-mcp | ⚠️ Phase 1-4 complete; default (oemer) engine loses SATB voice structure — fixed via opt-in `engine="audiveris"`, not yet the default | 111 unit |
 | synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
 | render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
 | musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |

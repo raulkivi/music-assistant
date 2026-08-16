@@ -47,8 +47,11 @@ else
 fi
 
 # ── 3. System apt packages ────────────────────────────────────────────────────
-# omr-mcp has no required apt packages.
-# oemer (the OCR engine) is pure Python + ONNX — no system libraries needed.
+# omr-mcp has no required apt packages for the default engine.
+# oemer (the default OCR engine) is pure Python + ONNX — no system libraries needed.
+# The optional engine="audiveris" (better multi-staff/SATB support) needs dpkg-deb to extract its
+# self-contained download, which ships with dpkg — already present on virtually all Debian/Ubuntu
+# systems, so nothing extra to install here either.
 info "No apt packages required for omr-mcp."
 
 # ── 4. Create the server venv via uv sync ────────────────────────────────────
@@ -68,6 +71,8 @@ echo -e "${BOLD}IMPORTANT — first-run note:${RESET}"
 echo "  The first time a tool is called, omr-mcp downloads ~100 MB of"
 echo "  ONNX model checkpoints. This happens once and takes ~5 minutes."
 echo "  Subsequent runs use the cached models."
+echo "  If you use engine=\"audiveris\" (better for multi-staff SATB choir scores),"
+echo "  its first use downloads a separate ~80 MB self-contained engine."
 echo
 
 echo -e "${BOLD}── Claude Desktop ───────────────────────────────────────────────${RESET}"

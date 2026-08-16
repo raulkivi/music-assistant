@@ -43,7 +43,7 @@ before writing any code.
 
 | Server | Status | Tests |
 |--------|--------|-------|
-| omr-mcp | ⚠️ Phase 1 + UX code complete; 20/41 integration — SATB output loses voice structure (see omr-mcp/docs/HANDOVER.md) | 91 unit |
+| omr-mcp | ⚠️ Phase 1-4 complete; default (oemer) engine loses SATB voice structure — fixed via opt-in `engine="audiveris"`, not yet the default (see omr-mcp/docs/HANDOVER.md) | 111 unit |
 | synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
 | render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
 | musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |

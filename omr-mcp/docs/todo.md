@@ -8,7 +8,7 @@ SATB bug specifically; this file is the actionable checklist.
 
 ## Critical
 
-- [ ] **SATB voice-loss in oemer output.** oemer reads multi-staff choir systems (4–5 simultaneous
+- [x] **SATB voice-loss in oemer output.** oemer reads multi-staff choir systems (4–5 simultaneous
       staves) as one *sequential* melodic line instead of bracketing them into separate simultaneous
       `<part>`s. Confirmed via inspecting generated MusicXML: single `<part>`, single `<staff>`,
       single `<voice>` for the whole piece, with `<clef>` alternating `F4`↔`G2` repeatedly. This is
@@ -24,9 +24,20 @@ SATB bug specifically; this file is the actionable checklist.
       presumably get force-resolved to 1 track upstream in `further_infer_track_nums()`, which is
       exactly how they end up flattened into one sequential part. This is architectural, not a
       pinnable dependency issue: oemer's own pipeline assumes "at most a piano grand staff."
-      Options to investigate: pre-split the input image into per-staff-system strips before calling
-      oemer; post-process the flat output to reconstruct `<part>`s from clef-alternation patterns;
-      or evaluate Audiveris as a real fallback engine (currently deferred in PLAN.md Phase 4).
+      **Test-fixture image quality ruled out as a contributing factor** (2026-08-16): the sample
+      PNGs are generated at 150 DPI (below `requirements.md` NFR-1's 300+ floor), but re-rendering
+      and re-running at 300 DPI produced an identical crash — oemer normalizes every input to a
+      fixed internal pixel budget (`inference.py::resize_image()`) regardless of source resolution,
+      so this is not an input-quality problem; see `docs/HANDOVER.md` for the full test.
+      **Fixed 2026-08-16 via the Audiveris engine option** (`engine="audiveris"`), the third of the
+      three options previously listed here (pre-split input, post-process flat output, or
+      Audiveris) — see `docs/HANDOVER.md` "Audiveris engine option" for the full implementation and
+      validation writeup. **Important nuance: `oemer` itself is unchanged and remains the default
+      engine** — a caller that doesn't explicitly pass `engine="audiveris"` still gets the old
+      flattened/crashing behavior. Checked off because the underlying capability gap (this server
+      can correctly digitize a multi-staff choir score) is now closed, not because oemer's own bug
+      was patched. Whether to flip the default or add auto-fallback detection is the next open
+      question — see `docs/HANDOVER.md` "What You Need to Do".
 
 ## Hard-rule violation
 
@@ -62,5 +73,20 @@ SATB bug specifically; this file is the actionable checklist.
         narrower bug (`staffline_extraction.py::filter_line_peaks()` crashes on an empty-peaks
         zone after dewarping). Judged not worth a fragile monkeypatch of internal oemer functions
         for one fixture — left unfixed, reported here for whoever wants to file it upstream.
-- [ ] Progress reporting (Phase 2, low priority per PLAN.md) — unimplemented.
-- [ ] Audiveris fallback (Phase 4) — deferred; would also address the SATB item above if pursued.
+- [x] **Progress reporting (Phase 2, low priority per PLAN.md) — implemented 2026-08-16.**
+      `server.py::_run_with_progress()` runs `recognize_image`/`recognize_image_to_file`/
+      `recognize_images` off the event loop via `asyncio.to_thread`, and — when the client supplied
+      an MCP `progressToken` — sends periodic `session.send_progress_notification()` heartbeats
+      (elapsed-time based; oemer exposes no real percentage-complete callback) every 5s until the
+      call finishes. As a side effect, the multi-minute oemer call no longer blocks the whole event
+      loop synchronously (a latent issue, not previously flagged). Caught and fixed one regression
+      this introduced along the way: `app.request_context` raises `LookupError` when there's no
+      live MCP request (e.g. unit tests calling `call_tool()` directly) — guarded with try/except.
+      A pre-existing test (`test_recognize_sheets_empty_list_returns_error`) had a weak
+      `assert "error" in data` that silently passed even after that regression changed the actual
+      error from `INVALID_PARAMETER`/"No images provided" to `PROCESSING_FAILED`/a `LookupError`
+      message — tightened to assert the real `error_code` and message. 4 new tests in
+      `TestRunWithProgress` (`tests/test_server.py`) cover the no-context, no-token,
+      token-sends-heartbeats, and exception-propagation paths.
+- [x] Audiveris fallback (Phase 4) — implemented 2026-08-16 as the fix for the Critical SATB item
+      above (same change, not a separate one — see that item for the full writeup).

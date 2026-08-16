@@ -36,8 +36,23 @@ The server MUST expose a tool that returns:
 - Server name and version
 - Supported input formats (PNG, JPEG)
 - Output format (MusicXML)
-- OMR engine name and version
+- OMR engine name and version (primary/default engine)
+- Availability status of each selectable OMR engine (see FR-6)
 - List of available tools
+
+### FR-6 — Engine selection
+
+`recognize_sheet`, `recognize_sheet_to_file`, and `recognize_sheets` MUST accept an optional
+`engine` parameter selecting the OMR backend:
+
+- `"oemer"` (default) — fast, in-process; flattens multi-staff (SATB) scores into a single
+  sequential part instead of separate simultaneous parts (see docs/HANDOVER.md for the confirmed
+  root cause) — real data loss for choir scores, not a benign modeling difference.
+- `"audiveris"` — correctly separates multi-staff scores into simultaneous parts. Requires 300+ DPI
+  source images (unlike oemer, which is DPI-insensitive — see docs/HANDOVER.md); downloads a
+  larger engine (~80 MB) on first use; runs as a subprocess rather than in-process.
+
+An unrecognized `engine` value MUST return `{"error": ..., "error_code": "INVALID_PARAMETER"}`.
 
 ### FR-5 — Input validation
 
@@ -60,13 +75,22 @@ The OMR engine MUST correctly recognize standard Western staff notation includin
 
 Accuracy on clean, printed scores (300+ DPI) MUST be sufficient for practical choir practice use. Handwritten scores and low-quality scans may produce degraded output; this is acceptable but SHOULD be documented.
 
+This 300+ DPI floor is a hard requirement for `engine="audiveris"` specifically — it explicitly
+rejects sheets whose staff-line spacing implies lower resolution rather than degrading gracefully
+(surfaces as `PROCESSING_FAILED`, not a garbled result). `engine="oemer"` (default) is DPI-insensitive
+in practice: it normalizes every input to a fixed internal pixel budget before recognition, so
+source resolution below 300 DPI doesn't measurably change its output (confirmed empirically —
+see docs/HANDOVER.md).
+
 ### NFR-2 — Offline operation
 
 All processing MUST run locally. No network requests to external APIs or cloud services are permitted during recognition.
 
 ### NFR-3 — Model bootstrapping
 
-On first run, the server MAY download model checkpoints (~100 MB). Subsequent runs MUST use the cached models. Download MUST be automatic and require no manual intervention beyond internet access.
+On first run, the server MAY download model checkpoints (~100 MB for oemer; ~80 MB for Audiveris,
+only on first use of `engine="audiveris"`). Subsequent runs MUST use the cached models/binaries.
+Download MUST be automatic and require no manual intervention beyond internet access.
 
 ### NFR-4 — Output correctness
 
@@ -94,6 +118,7 @@ The server MUST implement the Model Context Protocol using `mcp.server.stdio.std
 Input:
   image   string  required  file path or base64-encoded image data
   format  string  (optional) "path" or "base64" hint; auto-detected if omitted
+  engine  string  (optional) "oemer" (default) or "audiveris" — see FR-6
 
 Output:
   musicxml     string  MusicXML document
@@ -102,7 +127,7 @@ Output:
     staves_detected     integer
     measures            integer
     processing_time_ms  integer
-    engine              string   "oemer"
+    engine              string   "oemer" | "audiveris"
 ```
 
 ### IR-3 — Tool: `recognize_sheet_to_file`
@@ -111,6 +136,7 @@ Output:
 Input:
   input_path   string  required  path to input PNG/JPEG
   output_path  string  optional  path to write MusicXML (auto-generated if omitted)
+  engine       string  optional  "oemer" (default) or "audiveris" — see FR-6
 
 Output:
   output_path  string  path of written file
@@ -122,6 +148,7 @@ Output:
 ```
 Input:
   image_paths  list[string]  required  ordered list of image paths
+  engine       string        optional  "oemer" (default) or "audiveris" — see FR-6
 
 Output:
   musicxml     string  merged MusicXML document
@@ -138,9 +165,16 @@ Output:
   input_formats   list[string]   ["png", "jpeg"]
   output_formats  list[string]   ["musicxml"]
   tools           list[string]
-  engine          string         "oemer"
-  engine_version  string
+  backend         string         "oemer" (primary/default engine)
+  backend_version string
+  engines         object         per-engine availability, keyed "oemer" | "audiveris":
+                                    status  string  "ok" | "not_installed"
+                                    note    string  human-readable description
 ```
+
+(Corrected 2026-08-16: this previously documented `engine`/`engine_version` fields that never
+matched the actual implementation, which has always used `backend`/`backend_version` — unrelated
+drift found while adding the `engines` field for FR-6.)
 
 ### IR-6 — Error response format
 
@@ -165,8 +199,11 @@ All error responses MUST follow this structure:
 
 - Language: Python 3.11+
 - Package manager: uv
-- OMR engine: oemer (primary); Audiveris is a future option, not required for Phase 1
-- No subprocess calls to system tools; oemer runs in-process
+- OMR engines: oemer (default, in-process) and Audiveris (opt-in via `engine="audiveris"`,
+  implemented 2026-08-16 — see FR-6). oemer flattens multi-staff scores into one part; Audiveris
+  correctly separates them but requires 300+ DPI input and runs as a subprocess.
+- Audiveris is invoked via subprocess (a self-contained JVM bundle, downloaded lazily on first
+  use — see docs/HANDOVER.md); oemer remains in-process. Not a blanket "no subprocess" rule.
 - No shared state between tool calls; each call is independent
 
 ---

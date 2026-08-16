@@ -2,7 +2,12 @@
 
 import asyncio
 import json
+import time
 import pytest
+
+from mcp.server.lowlevel.server import request_ctx
+from mcp.shared.context import RequestContext
+from mcp.types import RequestParams
 
 from omr_mcp.server import _detect_input_format
 
@@ -48,24 +53,27 @@ class TestServerToolSchemas:
 
     def test_recognize_sheet_schema(self):
         from omr_mcp.server import list_tools
-        
+
         tools = asyncio.run(list_tools())
         recognize_sheet = next(t for t in tools if t.name == "recognize_sheet")
-        
+
         schema = recognize_sheet.inputSchema
         assert "image" in schema["properties"]
         assert "format" in schema["properties"]
+        assert "engine" in schema["properties"]
+        assert schema["properties"]["engine"]["enum"] == ["oemer", "audiveris"]
         assert schema["required"] == ["image"]
 
     def test_recognize_sheet_to_file_schema(self):
         from omr_mcp.server import list_tools
-        
+
         tools = asyncio.run(list_tools())
         tool = next(t for t in tools if t.name == "recognize_sheet_to_file")
-        
+
         schema = tool.inputSchema
         assert "input_path" in schema["properties"]
         assert "output_path" in schema["properties"]
+        assert "engine" in schema["properties"]
         assert schema["required"] == ["input_path"]
 
     def test_recognize_sheets_schema(self):
@@ -77,6 +85,7 @@ class TestServerToolSchemas:
         schema = tool.inputSchema
         assert "images" in schema["properties"]
         assert schema["properties"]["images"]["type"] == "array"
+        assert "engine" in schema["properties"]
         assert schema["required"] == ["images"]
 
     def test_list_capabilities_tool(self):
@@ -96,6 +105,9 @@ class TestServerToolSchemas:
         assert "png" in data["input_formats"]
         assert "musicxml" in data["output_formats"]
         assert "list_capabilities" in data["tools"]
+        assert "engines" in data
+        assert data["engines"]["oemer"]["status"] == "ok"
+        assert data["engines"]["audiveris"]["status"] in ("ok", "not_installed")
 
     def test_list_supported_formats_tool(self):
         """Deprecated alias — should return the same payload as list_capabilities."""
@@ -119,7 +131,8 @@ class TestServerToolSchemas:
             call_tool("recognize_sheets", {"images": []})
         )
         data = json.loads(result[0].text)
-        assert "error" in data
+        assert data.get("error_code") == "INVALID_PARAMETER"
+        assert "No images provided" in data["error"]
 
     def test_recognize_sheets_invalid_images_param_returns_error(self):
         from omr_mcp.server import call_tool
@@ -129,3 +142,139 @@ class TestServerToolSchemas:
         )
         data = json.loads(result[0].text)
         assert "error" in data
+
+
+class TestEngineRouting:
+    """Tests that call_tool()'s optional engine= argument reaches the underlying
+    omr_engine calls, and defaults to 'oemer' when omitted."""
+
+    def test_recognize_sheet_defaults_to_oemer(self, tmp_path, monkeypatch):
+        import omr_mcp.server as srv
+
+        captured = {}
+        def _fake_recognize_image(path, engine="oemer"):
+            captured["engine"] = engine
+            return {"musicxml": "<score-partwise/>", "metadata": {"engine": engine}}
+        monkeypatch.setattr(srv, "recognize_image", _fake_recognize_image)
+
+        asyncio.run(srv.call_tool("recognize_sheet", {"image": str(tmp_path / "x.png"), "format": "path"}))
+        assert captured["engine"] == "oemer"
+
+    def test_recognize_sheet_forwards_explicit_engine(self, tmp_path, monkeypatch):
+        import omr_mcp.server as srv
+
+        captured = {}
+        def _fake_recognize_image(path, engine="oemer"):
+            captured["engine"] = engine
+            return {"musicxml": "<score-partwise/>", "metadata": {"engine": engine}}
+        monkeypatch.setattr(srv, "recognize_image", _fake_recognize_image)
+
+        asyncio.run(srv.call_tool(
+            "recognize_sheet", {"image": str(tmp_path / "x.png"), "format": "path", "engine": "audiveris"}
+        ))
+        assert captured["engine"] == "audiveris"
+
+    def test_recognize_sheet_to_file_forwards_engine(self, tmp_path, monkeypatch):
+        import omr_mcp.server as srv
+
+        captured = {}
+        def _fake_recognize_image_to_file(input_path, output_path, engine="oemer"):
+            captured["engine"] = engine
+            return {"output_path": "out.musicxml", "metadata": {"engine": engine}}
+        monkeypatch.setattr(srv, "recognize_image_to_file", _fake_recognize_image_to_file)
+
+        asyncio.run(srv.call_tool(
+            "recognize_sheet_to_file", {"input_path": str(tmp_path / "x.png"), "engine": "audiveris"}
+        ))
+        assert captured["engine"] == "audiveris"
+
+    def test_recognize_sheets_forwards_engine(self, tmp_path, monkeypatch):
+        import omr_mcp.server as srv
+
+        captured = {}
+        def _fake_recognize_images(paths, engine="oemer"):
+            captured["engine"] = engine
+            return {"musicxml": "<score-partwise/>", "metadata": {"engine": engine, "page_count": 1}}
+        monkeypatch.setattr(srv, "recognize_images", _fake_recognize_images)
+
+        asyncio.run(srv.call_tool(
+            "recognize_sheets", {"images": [str(tmp_path / "x.png")], "engine": "audiveris"}
+        ))
+        assert captured["engine"] == "audiveris"
+
+
+class _FakeSession:
+    """Minimal stand-in for ServerSession, recording sent progress notifications."""
+
+    def __init__(self):
+        self.notifications = []
+
+    async def send_progress_notification(self, progress_token, progress, total=None, message=None):
+        self.notifications.append((progress_token, progress, message))
+
+
+def _set_request_context(*, progress_token=None):
+    """Install a fake MCP RequestContext for the duration of the caller's async block,
+    mirroring what the real Server sets before invoking a tool handler."""
+    session = _FakeSession()
+    meta = RequestParams.Meta(progressToken=progress_token) if progress_token else None
+    ctx = RequestContext(request_id="test-request", meta=meta, session=session, lifespan_context=None)
+    return ctx, session
+
+
+class TestRunWithProgress:
+    """Tests for the progress-notification wrapper around long-running engine calls."""
+
+    def test_no_request_context_runs_and_returns_result(self):
+        # Matches how unit tests call call_tool() directly, with no live MCP request —
+        # app.request_context raises LookupError in that case; must not propagate.
+        from omr_mcp.server import _run_with_progress
+
+        result = asyncio.run(_run_with_progress(lambda: 42, message_prefix="test"))
+        assert result == 42
+
+    def test_no_progress_token_runs_without_notifications(self):
+        from omr_mcp.server import _run_with_progress
+
+        async def _call():
+            ctx, session = _set_request_context(progress_token=None)
+            token = request_ctx.set(ctx)
+            try:
+                return await _run_with_progress(lambda: 42, message_prefix="test"), session
+            finally:
+                request_ctx.reset(token)
+
+        result, session = asyncio.run(_call())
+        assert result == 42
+        assert session.notifications == []
+
+    def test_progress_token_sends_heartbeat_notifications(self):
+        from omr_mcp.server import _run_with_progress
+
+        def _slow():
+            time.sleep(0.2)
+            return "done"
+
+        async def _call():
+            ctx, session = _set_request_context(progress_token="tok-1")
+            token = request_ctx.set(ctx)
+            try:
+                result = await _run_with_progress(_slow, message_prefix="Working", interval_seconds=0.05)
+                return result, session
+            finally:
+                request_ctx.reset(token)
+
+        result, session = asyncio.run(_call())
+        assert result == "done"
+        assert len(session.notifications) >= 2
+        assert all(token == "tok-1" for token, _progress, _message in session.notifications)
+        assert all("Working" in message for _token, _progress, message in session.notifications)
+
+    def test_exception_from_fn_propagates(self):
+        from omr_mcp.server import _run_with_progress
+
+        def _boom():
+            raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            asyncio.run(_run_with_progress(_boom, message_prefix="test"))
