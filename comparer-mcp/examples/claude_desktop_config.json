@@ -1,0 +1,9 @@
+{
+  "_comment": "Place this file at: ~/.config/claude/claude_desktop_config.json",
+  "mcpServers": {
+    "comparer": {
+      "command": "uvx",
+      "args": ["comparer-mcp"]
+    }
+  }
+}

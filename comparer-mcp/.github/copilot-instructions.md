@@ -6,8 +6,8 @@ Music-aware comparison of two MusicXML files. Provides structured, multi-level d
 from global similarity score down to individual note differences. Primary use cases:
 version/arrangement comparison, OMR quality evaluation, round-trip fidelity testing.
 
-**Status:** Phase 1 (core comparison MVP) complete. 45/45 tests pass (43 unit + 2 integration).
-`server.py` (Phase 3, MCP tools) not yet built.
+**Status:** Phase 4 (Advanced features) complete — all originally-scoped phases done. 134/134 tests
+pass (127 unit + 7 integration). `server.py` exposes all 8 tools.
 
 ---
 
@@ -34,12 +34,16 @@ comparer-mcp/
 │   ├── part_matcher.py      # Part matching (name, instrument, range)
 │   ├── measure_comparator.py # Measure-level structural comparison
 │   ├── note_aligner.py      # Edit-distance note alignment
+│   ├── report.py            # Human-readable comparison report (pure ComparisonResult -> str)
+│   ├── annotator.py         # Colored MusicXML diff export
 │   └── utils.py             # Validation, pitch names, duration formatting
 ├── tests/
 │   ├── test_engine.py       # End-to-end comparison tests
 │   ├── test_server.py       # Tool schemas, error propagation
 │   ├── test_part_matcher.py # Part matching edge cases
 │   ├── test_note_aligner.py # Alignment algorithm tests
+│   ├── test_report.py
+│   ├── test_annotator.py
 │   ├── test_utils.py
 │   └── fixtures/            # MusicXML test files
 └── docs/
@@ -51,7 +55,7 @@ comparer-mcp/
 
 ---
 
-## Planned Tools
+## Implemented Tools
 
 | Tool | Description |
 |------|-------------|
@@ -59,6 +63,8 @@ comparer-mcp/
 | `compare_musicxml_files` | Full diff of two MusicXML file paths → structured `ComparisonResult` JSON |
 | `quick_similarity` | Similarity score (0.0–1.0) + summary statistics |
 | `list_changes` | Filtered note-level diffs (by part, measure range) |
+| `generate_comparison_report` | Human-readable version comparison report |
+| `export_annotated_musicxml` | Colored MusicXML diff export (chain into render-mcp to visualize) |
 | `health_check` | Server status and music21 version |
 | `list_capabilities` | Server metadata per conventions |
 

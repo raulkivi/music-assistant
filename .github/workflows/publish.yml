@@ -10,8 +10,8 @@
 #      - Repository name:    music-assistant
 #      - Workflow filename:  publish.yml
 #      - Environment name:   pypi
-#   4. Repeat for each of the five packages:
-#      omr-mcp, synth-mcp, render-mcp, musicxml-abc-mcp, pitch-mcp
+#   4. Repeat for each of the six packages:
+#      omr-mcp, synth-mcp, render-mcp, musicxml-abc-mcp, pitch-mcp, comparer-mcp
 #
 #   Full guide: https://docs.pypi.org/trusted-publishers/
 #
@@ -29,6 +29,7 @@ on:
       - "render-mcp/v*"
       - "musicxml-abc-mcp/v*"
       - "pitch-mcp/v*"
+      - "comparer-mcp/v*"
 
 jobs:
   publish-omr-mcp:
@@ -125,3 +126,22 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: pitch-mcp/dist/
+
+  publish-comparer-mcp:
+    name: Publish comparer-mcp
+    if: startsWith(github.ref, 'refs/tags/comparer-mcp/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        working-directory: comparer-mcp
+        run: uv build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: comparer-mcp/dist/

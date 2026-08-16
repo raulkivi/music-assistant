@@ -6,9 +6,10 @@ Music-aware comparison of two MusicXML files. Provides structured, multi-level d
 from global similarity score down to individual note differences. Primary use cases:
 version/arrangement comparison, OMR quality evaluation, round-trip fidelity testing.
 
-**Status:** Phase 1 (core comparison MVP) complete. 45/45 tests pass (43 unit + 2 integration).
-`server.py` (Phase 3, MCP tools) not yet built — engine.py/models.py/part_matcher.py/
-note_aligner.py/utils.py are all implemented and independently usable.
+**Status:** Phase 4 (Advanced features) complete — all originally-scoped phases done. 134/134 tests
+pass (127 unit + 7 integration). `server.py` exposes all 8 tools; engine.py/models.py/
+part_matcher.py/note_aligner.py/measure_comparator.py/report.py/annotator.py/utils.py are all
+implemented and independently usable.
 
 ---
 
@@ -34,6 +35,8 @@ Install dependencies: `uv sync`
 | `src/comparer_mcp/part_matcher.py` | Part matching logic (name, instrument, range) |
 | `src/comparer_mcp/note_aligner.py` | Edit-distance note alignment |
 | `src/comparer_mcp/measure_comparator.py` | Measure-level structural comparison |
+| `src/comparer_mcp/report.py` | Human-readable comparison report (pure `ComparisonResult` -> str) |
+| `src/comparer_mcp/annotator.py` | Colored MusicXML diff export |
 | `src/comparer_mcp/utils.py` | Validation, pitch names, duration formatting |
 | `docs/HANDOVER.md` | Status, remaining work, definition of done |
 | `docs/PLAN.md` | Implementation plan and technology decisions |
@@ -42,7 +45,7 @@ Install dependencies: `uv sync`
 
 ---
 
-## Planned Tools
+## Implemented Tools
 
 | Tool | Description |
 |------|-------------|
@@ -50,6 +53,8 @@ Install dependencies: `uv sync`
 | `compare_musicxml_files` | Full diff of two MusicXML file paths |
 | `quick_similarity` | Similarity score (0.0–1.0) + summary |
 | `list_changes` | Filtered note-level diffs |
+| `generate_comparison_report` | Human-readable version comparison report |
+| `export_annotated_musicxml` | Colored MusicXML diff export (chain into render-mcp to visualize) |
 | `health_check` | Server status and music21 version |
 | `list_capabilities` | Server metadata per conventions |
 

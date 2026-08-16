@@ -17,6 +17,10 @@ Match parts between two scores using a priority cascade:
 3. Positional order
 4. Pitch range heuristic
 
+**Currently implemented: steps 1 and 3 only.** Steps 2 and 4 are not implemented (see
+`docs/HANDOVER.md` "What does NOT exist yet" and "Next steps (beyond Phase 4)") — a part with no
+name match falls straight to positional pairing, skipping any instrument- or range-based match.
+
 Report unmatched parts as missing (in reference only) or extra (in target only).
 
 ### FR-3: Note-level alignment
@@ -30,10 +34,15 @@ Weighted aggregate: 30% structure (parts + measures matched) + 70% note accuracy
 
 ### FR-5: Filtering
 
-Support filtering comparison by:
-- Part name(s)
-- Measure range
-- Options: expand repeats, normalize pitch, ignore articulations
+Support filtering comparison by, via `options` on `compare()`/`compare_files()`:
+- `part_filter`: part name(s), applied before part matching
+- `measure_range`: `[start, end]` inclusive, applied to measures and key/time signature diffs
+- `ignore_articulations`: blanks `NoteInfo.articulations`
+- `normalize_pitch`: transposes transposing instruments to concert/sounding pitch (`Score.toSoundingPitch()`) before comparing
+- `expand_repeats`: unfolds repeat structure (`Score.expandRepeats()`) before comparing; **default `false`** (opt-in — see `docs/PLAN.md` "Changed decisions"); a malformed repeat structure raises `ProcessingError("PROCESSING_FAILED")` rather than crashing
+
+`list_changes`'s `part`/`measure_range` arguments remain a separate, server.py-side post-filter of
+an already-computed result (unrelated to `options`, unchanged since Phase 3).
 
 ### FR-6: Quick similarity
 
@@ -41,7 +50,24 @@ Return only the similarity score and summary statistics (no note-level detail) f
 
 ### FR-7: MCP tools
 
-Expose as MCP server with tools: `compare_musicxml`, `compare_musicxml_files`, `quick_similarity`, `list_changes`, `health_check`, `list_capabilities`.
+Expose as MCP server with tools: `compare_musicxml`, `compare_musicxml_files`, `quick_similarity`, `list_changes`, `generate_comparison_report`, `export_annotated_musicxml`, `health_check`, `list_capabilities`.
+
+### FR-8: Human-readable comparison report
+
+`generate_comparison_report` returns a multi-line text summary of a `ComparisonResult`: overall
+similarity headline, missing/extra parts, missing/extra measures, key/time signature changes, and
+note-level differences grouped into measure-range runs (e.g. "8 pitch changes in measures 17-24",
+or "transposed by 3 semitones in measures 17-24" when every pitch change in a run shares the same
+`interval_error`).
+
+### FR-9: Annotated MusicXML diff export
+
+`export_annotated_musicxml` returns two MusicXML documents — `reference_annotated_musicxml` and
+`target_annotated_musicxml` — with per-note `color` attributes marking the diff operation
+(`PITCH_CHANGE`, `DURATION_CHANGE`, `SUBSTITUTION`, `INSERTION`, `DELETION`; `MATCH` left
+uncolored). Both documents are valid standalone MusicXML, chainable directly into render-mcp's
+`render_to_pdf`/`render_to_image` tools (both accept a raw `musicxml` string) to visualize the
+diff. Structural-only diffs (a whole measure/part missing or extra on one side) are not colored.
 
 ---
 

@@ -1,6 +1,6 @@
 """Tests for comparer_mcp.utils."""
 
-from music21 import chord, note, pitch, tie
+from music21 import articulations, chord, note, pitch, tie
 
 from comparer_mcp.utils import note_signature, note_to_info, validate_musicxml
 
@@ -74,6 +74,28 @@ class TestNoteToInfo:
         n = note.Note("D4")
         info = note_to_info(n)
         assert info.lyrics is None
+
+    def test_no_articulations_is_empty_list(self):
+        n = note.Note("D4")
+        info = note_to_info(n)
+        assert info.articulations == []
+
+    def test_articulations_are_named(self):
+        n = note.Note("D4")
+        n.articulations = [articulations.Staccato(), articulations.Accent()]
+        info = note_to_info(n)
+        assert info.articulations == ["staccato", "accent"]
+
+    def test_rest_articulations_is_empty_list(self):
+        r = note.Rest(quarterLength=1.0)
+        info = note_to_info(r)
+        assert info.articulations == []
+
+    def test_ignore_articulations_blanks_the_list(self):
+        n = note.Note("D4")
+        n.articulations = [articulations.Staccato(), articulations.Accent()]
+        info = note_to_info(n, ignore_articulations=True)
+        assert info.articulations == []
 
 
 class TestNoteSignature:

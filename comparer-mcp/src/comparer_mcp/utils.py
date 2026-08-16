@@ -21,8 +21,12 @@ def validate_musicxml(musicxml: str) -> tuple[bool, str]:
     return True, ""
 
 
-def note_to_info(note_obj) -> NoteInfo:
-    """Convert a music21 Note/Rest/Chord into a NoteInfo snapshot."""
+def note_to_info(note_obj, ignore_articulations: bool = False) -> NoteInfo:
+    """Convert a music21 Note/Rest/Chord into a NoteInfo snapshot.
+
+    When ignore_articulations is True, NoteInfo.articulations is always []
+    (options.ignore_articulations, docs/architecture.md §8).
+    """
     is_rest = note_obj.isRest
     is_chord = note_obj.isChord
 
@@ -47,6 +51,11 @@ def note_to_info(note_obj) -> NoteInfo:
         if texts:
             lyrics = " ".join(texts)
 
+    if ignore_articulations:
+        articulations = []
+    else:
+        articulations = [a.name for a in getattr(note_obj, "articulations", None) or []]
+
     return NoteInfo(
         pitch=pitch_str,
         midi=midi,
@@ -56,6 +65,7 @@ def note_to_info(note_obj) -> NoteInfo:
         is_chord=is_chord,
         tie=tie_type,
         lyrics=lyrics,
+        articulations=articulations,
     )
 
 

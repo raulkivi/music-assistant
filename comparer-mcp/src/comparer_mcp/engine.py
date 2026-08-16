@@ -10,8 +10,8 @@ Orchestrates the layered comparison pipeline:
     note_aligner.align_notes()   -> per-measure note-level diff operations
 
 Phase 1 scope (see docs/PLAN.md): part + measure + note-level comparison and
-a weighted similarity score. Key/time signature diffs, voice-aware alignment,
-and articulation/tie comparison are Phase 2.
+a weighted similarity score. Phase 2 adds key/time signature diffs,
+voice-aware alignment, and articulation comparison.
 """
 
 from pathlib import Path
@@ -19,6 +19,12 @@ from typing import Optional
 
 from music21 import converter
 
+from comparer_mcp.measure_comparator import (
+    compare_key_signatures,
+    compare_time_signatures,
+    match_voices,
+    measure_voices,
+)
 from comparer_mcp.models import (
     ComparisonResult,
     ComparisonSummary,
@@ -47,6 +53,13 @@ class ProcessingError(Exception):
         self.error_code = error_code
 
 
+# Input formats (docs/requirements.md "Interfaces"): .musicxml, .xml, or
+# compressed .mxl. compare_files() rejects anything else up front rather than
+# letting an unrelated file type fall through to a generic parse failure
+# (INVALID_INPUT) — see docs/HANDOVER.md "Known gotchas".
+_SUPPORTED_FILE_EXTENSIONS = {".musicxml", ".xml", ".mxl"}
+
+
 def _parse_score_from_string(xml_str: str):
     ok, reason = validate_musicxml(xml_str)
     if not ok:
@@ -72,15 +85,6 @@ def _measure_map(part) -> dict:
     return {m.number: m for m in part.getElementsByClass("Measure")}
 
 
-def _measure_notes(measure) -> list:
-    """Notes and rests in a measure, in score order.
-
-    Flattens voices (Phase 1 does not do voice-aware alignment — see
-    docs/PLAN.md Phase 2).
-    """
-    return sorted(measure.flatten().notesAndRests, key=lambda n: n.offset)
-
-
 def _interval_error(ref_info, tgt_info) -> Optional[int]:
     if ref_info is None or tgt_info is None:
         return None
@@ -89,28 +93,115 @@ def _interval_error(ref_info, tgt_info) -> Optional[int]:
     return abs(tgt_info.midi - ref_info.midi)
 
 
-def _compare_measure(measure_number: int, ref_measure, tgt_measure) -> MeasureDiff:
-    ref_notes = _measure_notes(ref_measure)
-    tgt_notes = _measure_notes(tgt_measure)
+def _validate_measure_range(measure_range) -> None:
+    if measure_range is None:
+        return
+    if (
+        not isinstance(measure_range, list)
+        or len(measure_range) != 2
+        or not all(isinstance(n, int) and not isinstance(n, bool) for n in measure_range)
+        or measure_range[0] > measure_range[1]
+    ):
+        raise ProcessingError(
+            "options.measure_range must be a [start, end] pair of integers with start <= end.",
+            "INVALID_PARAMETER",
+        )
 
-    aligned = align_notes(ref_notes, tgt_notes)
+
+def _validate_part_filter(part_filter) -> None:
+    if part_filter is None:
+        return
+    if not isinstance(part_filter, list) or not all(isinstance(n, str) for n in part_filter):
+        raise ProcessingError(
+            "options.part_filter must be a list of part name strings.",
+            "INVALID_PARAMETER",
+        )
+
+
+def _filter_parts_by_name(parts: list, part_filter: list) -> list:
+    wanted = {name.strip().lower() for name in part_filter}
+    return [p for p in parts if (p.partName or "").strip().lower() in wanted]
+
+
+def _expand_repeats(score, label: str):
+    try:
+        expanded = score.expandRepeats()
+    except Exception as e:
+        raise ProcessingError(f"Failed to expand repeats in {label} score: {e}", "PROCESSING_FAILED")
+    # expandRepeats() keeps each repeated measure's original number (e.g.
+    # 1, 2, 1, 2), which would collide in _measure_map's number -> Measure
+    # dict. Renumber sequentially so every unfolded measure survives.
+    for part in expanded.parts:
+        for i, measure in enumerate(part.getElementsByClass("Measure"), start=1):
+            measure.number = i
+    return expanded
+
+
+def _apply_score_options(reference, target, options: Optional[dict]):
+    """Apply options.expand_repeats / options.normalize_pitch (score-level
+    transforms) and validate options.part_filter / options.measure_range.
+
+    expand_repeats and normalize_pitch return new music21 Score objects
+    (music21 does not mutate in place), so the transformed reference/target
+    must be returned and used for everything downstream — including
+    annotation export, which needs to color notes on the same objects that
+    were actually compared.
+    """
+    options = options or {}
+    _validate_measure_range(options.get("measure_range"))
+    _validate_part_filter(options.get("part_filter"))
+
+    if options.get("expand_repeats"):
+        reference = _expand_repeats(reference, "reference")
+        target = _expand_repeats(target, "target")
+
+    if options.get("normalize_pitch"):
+        reference = reference.toSoundingPitch()
+        target = target.toSoundingPitch()
+
+    return (
+        reference,
+        target,
+        options.get("part_filter"),
+        options.get("measure_range"),
+        bool(options.get("ignore_articulations")),
+    )
+
+
+def _compare_measure(
+    measure_number: int,
+    ref_measure,
+    tgt_measure,
+    ignore_articulations: bool = False,
+    aligned_collector: Optional[list] = None,
+) -> MeasureDiff:
+    ref_voices = measure_voices(ref_measure)
+    tgt_voices = measure_voices(tgt_measure)
 
     note_diffs = []
-    for op in aligned:
-        ref_info = note_to_info(op.reference) if op.reference is not None else None
-        tgt_info = note_to_info(op.target) if op.target is not None else None
-        beat = float(op.reference.beat) if op.reference is not None else float(op.target.beat)
-        note_diffs.append(
-            NoteDiff(
+    for voice_number, ref_notes, tgt_notes in match_voices(ref_voices, tgt_voices):
+        aligned = align_notes(ref_notes, tgt_notes)
+        for op in aligned:
+            ref_info = (
+                note_to_info(op.reference, ignore_articulations) if op.reference is not None else None
+            )
+            tgt_info = (
+                note_to_info(op.target, ignore_articulations) if op.target is not None else None
+            )
+            beat = float(op.reference.beat) if op.reference is not None else float(op.target.beat)
+            note_diff = NoteDiff(
                 measure_number=measure_number,
                 beat=beat,
-                voice=1,  # Phase 1: voices are flattened, see _measure_notes
+                voice=voice_number,
                 operation=op.operation,
                 reference=ref_info,
                 target=tgt_info,
                 interval_error=_interval_error(ref_info, tgt_info),
             )
-        )
+            note_diffs.append(note_diff)
+            if aligned_collector is not None:
+                aligned_collector.append((note_diff, op))
+    note_diffs.sort(key=lambda nd: (nd.voice, nd.beat))
 
     similarity = _note_score(note_diffs)
 
@@ -134,11 +225,21 @@ def _note_score(note_diffs: list) -> float:
     return (identical + 0.5 * partial) / len(note_diffs)
 
 
-def _compare_part(ref_part, tgt_part) -> PartDiff:
+def _compare_part(
+    ref_part,
+    tgt_part,
+    measure_range: Optional[list] = None,
+    ignore_articulations: bool = False,
+    aligned_collector: Optional[list] = None,
+) -> PartDiff:
     ref_measures = _measure_map(ref_part)
     tgt_measures = _measure_map(tgt_part)
 
     all_numbers = sorted(set(ref_measures) | set(tgt_measures))
+    if measure_range:
+        start, end = measure_range
+        all_numbers = [n for n in all_numbers if start <= n <= end]
+
     measure_diffs = []
     measures_missing = []
     measures_extra = []
@@ -151,20 +252,39 @@ def _compare_part(ref_part, tgt_part) -> PartDiff:
         elif tgt_measure is None:
             measures_missing.append(number)
         else:
-            measure_diffs.append(_compare_measure(number, ref_measure, tgt_measure))
+            measure_diffs.append(
+                _compare_measure(
+                    number, ref_measure, tgt_measure, ignore_articulations, aligned_collector
+                )
+            )
 
     all_note_diffs = [nd for md in measure_diffs for nd in md.note_diffs]
     note_score = _note_score(all_note_diffs)
     matched_measures = len(measure_diffs)
-    total_measures = max(len(ref_measures), len(tgt_measures)) or 1
+    if measure_range:
+        start, end = measure_range
+        ref_count = sum(1 for n in ref_measures if start <= n <= end)
+        tgt_count = sum(1 for n in tgt_measures if start <= n <= end)
+    else:
+        ref_count, tgt_count = len(ref_measures), len(tgt_measures)
+    total_measures = max(ref_count, tgt_count) or 1
     structure_score = matched_measures / total_measures
     similarity = _STRUCTURE_WEIGHT * structure_score + _NOTE_WEIGHT * note_score
+
+    key_sig_diffs = compare_key_signatures(ref_part, tgt_part)
+    time_sig_diffs = compare_time_signatures(ref_part, tgt_part)
+    if measure_range:
+        start, end = measure_range
+        key_sig_diffs = [d for d in key_sig_diffs if start <= d.measure_number <= end]
+        time_sig_diffs = [d for d in time_sig_diffs if start <= d.measure_number <= end]
 
     return PartDiff(
         part_name=ref_part.partName or tgt_part.partName or "",
         reference_part_id=str(ref_part.id),
         target_part_id=str(tgt_part.id),
         similarity_score=similarity,
+        key_sig_diffs=key_sig_diffs,
+        time_sig_diffs=time_sig_diffs,
         measure_diffs=measure_diffs,
         measures_missing=measures_missing,
         measures_extra=measures_extra,
@@ -197,9 +317,8 @@ def _build_summary(match_result, part_diffs: list) -> ComparisonSummary:
         notes_substituted=_count("SUBSTITUTION"),
         notes_missing=_count("DELETION"),
         notes_extra=_count("INSERTION"),
-        # Key/time signature comparison is Phase 2 (docs/PLAN.md).
-        key_signature_diffs=0,
-        time_signature_diffs=0,
+        key_signature_diffs=sum(len(pd.key_sig_diffs) for pd in part_diffs),
+        time_signature_diffs=sum(len(pd.time_sig_diffs) for pd in part_diffs),
     )
 
 
@@ -225,22 +344,42 @@ def _overall_similarity(match_result, part_diffs: list) -> float:
     return _STRUCTURE_WEIGHT * structure_score + _NOTE_WEIGHT * note_score
 
 
-def _compare_scores(reference, target) -> ComparisonResult:
-    match_result = match_parts(list(reference.parts), list(target.parts))
-    part_diffs = [_compare_part(ref, tgt) for ref, tgt in match_result.matched]
+def _compare_scores(reference, target, options: Optional[dict] = None, aligned_collector: Optional[list] = None):
+    """Returns (ComparisonResult, reference, target) — reference/target are
+    returned because options.expand_repeats/normalize_pitch produce new
+    Score objects (music21 does not transform in place); callers that need
+    to act on the same notes that were actually compared (e.g. annotation)
+    must use these, not the objects originally passed in."""
+    reference, target, part_filter, measure_range, ignore_articulations = _apply_score_options(
+        reference, target, options
+    )
 
-    return ComparisonResult(
+    reference_parts = list(reference.parts)
+    target_parts = list(target.parts)
+    if part_filter:
+        reference_parts = _filter_parts_by_name(reference_parts, part_filter)
+        target_parts = _filter_parts_by_name(target_parts, part_filter)
+
+    match_result = match_parts(reference_parts, target_parts)
+    part_diffs = [
+        _compare_part(ref, tgt, measure_range, ignore_articulations, aligned_collector)
+        for ref, tgt in match_result.matched
+    ]
+
+    result = ComparisonResult(
         similarity_score=_overall_similarity(match_result, part_diffs),
         summary=_build_summary(match_result, part_diffs),
         part_diffs=part_diffs,
     )
+    return result, reference, target
 
 
 def compare(reference_xml: str, target_xml: str, options: Optional[dict] = None) -> ComparisonResult:
     """Compare two MusicXML strings and return a full ComparisonResult."""
     reference = _parse_score_from_string(reference_xml)
     target = _parse_score_from_string(target_xml)
-    return _compare_scores(reference, target)
+    result, _, _ = _compare_scores(reference, target, options)
+    return result
 
 
 def compare_files(reference: str, target: str, options: Optional[dict] = None) -> ComparisonResult:
@@ -254,6 +393,109 @@ def compare_files(reference: str, target: str, options: Optional[dict] = None) -
     if not tgt_path.exists():
         raise ProcessingError(f"Target file not found: {target}", "FILE_NOT_FOUND")
 
+    if ref_path.suffix.lower() not in _SUPPORTED_FILE_EXTENSIONS:
+        raise ProcessingError(
+            f"Unsupported file extension for reference file: {ref_path.suffix or '(none)'}. "
+            f"Supported: {', '.join(sorted(_SUPPORTED_FILE_EXTENSIONS))}.",
+            "UNSUPPORTED_FORMAT",
+        )
+    if tgt_path.suffix.lower() not in _SUPPORTED_FILE_EXTENSIONS:
+        raise ProcessingError(
+            f"Unsupported file extension for target file: {tgt_path.suffix or '(none)'}. "
+            f"Supported: {', '.join(sorted(_SUPPORTED_FILE_EXTENSIONS))}.",
+            "UNSUPPORTED_FORMAT",
+        )
+
     reference_score = _parse_score_from_path(ref_path)
     target_score = _parse_score_from_path(tgt_path)
-    return _compare_scores(reference_score, target_score)
+    result, _, _ = _compare_scores(reference_score, target_score, options)
+    return result
+
+
+def compare_with_annotations(
+    reference_xml: str, target_xml: str, options: Optional[dict] = None
+):
+    """Like compare(), but also returns the parsed (and, if options requested
+    it, transformed) reference/target Score objects plus the raw
+    (NoteDiff, AlignedNote) pairs produced during comparison — the building
+    blocks comparer_mcp.annotator uses to color the actual note objects that
+    were compared and re-serialize them to MusicXML.
+    """
+    reference = _parse_score_from_string(reference_xml)
+    target = _parse_score_from_string(target_xml)
+    aligned_collector: list = []
+    result, reference, target = _compare_scores(
+        reference, target, options, aligned_collector=aligned_collector
+    )
+    return result, reference, target, aligned_collector
+
+
+_SMOKE_MUSICXML = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Test</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <type>whole</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def health_check() -> dict:
+    """Run a smoke test to verify all runtime dependencies are working.
+
+    Returns:
+        {
+            "status": "ok" | "degraded",
+            "checks": {
+                "music21": {"ok": bool, "version": str | None, "error": str | None},
+                "self_compare": {"ok": bool, "error": str | None},
+            },
+            "summary": "human-readable status string",
+        }
+    """
+    result: dict = {"status": "ok", "checks": {}, "summary": ""}
+
+    try:
+        import music21
+        result["checks"]["music21"] = {"ok": True, "version": music21.__version__}
+    except ImportError as e:
+        result["checks"]["music21"] = {"ok": False, "version": None, "error": str(e)}
+        result["status"] = "degraded"
+
+    if result["status"] == "ok":
+        try:
+            comparison = compare(_SMOKE_MUSICXML, _SMOKE_MUSICXML)
+            if comparison.similarity_score != 1.0:
+                raise ValueError(
+                    f"Self-comparison similarity was {comparison.similarity_score}, expected 1.0"
+                )
+            result["checks"]["self_compare"] = {"ok": True}
+        except Exception as e:
+            result["checks"]["self_compare"] = {"ok": False, "error": str(e)}
+            result["status"] = "degraded"
+
+    if result["status"] == "ok":
+        version = result["checks"]["music21"]["version"]
+        result["summary"] = f"All systems operational. music21 {version} is working correctly."
+    else:
+        issues = [
+            f"{k}: {v.get('error', 'failed')}"
+            for k, v in result["checks"].items()
+            if not v.get("ok")
+        ]
+        result["summary"] = "Server is degraded: " + "; ".join(issues)
+
+    return result

@@ -1,0 +1,9 @@
+{
+  "_comment": "Place this file at: ~/.cursor/mcp.json",
+  "mcpServers": {
+    "comparer": {
+      "command": "uvx",
+      "args": ["comparer-mcp"]
+    }
+  }
+}

@@ -362,6 +362,8 @@ comparer-mcp/
 │       ├── measure_comparator.py # Measure-level structural comparison
 │       ├── note_aligner.py      # Voice/note alignment using edit distance
 │       ├── models.py            # Dataclasses: ComparisonResult, NoteDiff, etc.
+│       ├── report.py            # Phase 4: human-readable comparison report (pure ComparisonResult -> str)
+│       ├── annotator.py         # Phase 4: colored MusicXML diff export (music21, no mcp import)
 │       └── utils.py             # Validation, pitch names, duration formatting
 ├── tests/
 │   ├── __init__.py
@@ -404,6 +406,8 @@ All error responses use `{"error": "...", "error_code": "..."}` per conventions.
 | `compare_musicxml_files` | `reference_path` (string), `target_path` (string), optional `options` | Full `ComparisonResult` JSON |
 | `quick_similarity` | `reference_xml` (string), `target_xml` (string) | `{ "similarity_score": 0.87, "summary": {...} }` |
 | `list_changes` | `reference_xml`, `target_xml`, optional `part` filter, optional `measure_range` | Filtered list of `NoteDiff` entries (for targeted queries) |
+| `generate_comparison_report` | `reference_xml`, `target_xml`, optional `options` | `{ "report": "...", "similarity_score": 0.87 }` — human-readable summary |
+| `export_annotated_musicxml` | `reference_xml`, `target_xml`, optional `options` | `{ "reference_annotated_musicxml": "...", "target_annotated_musicxml": "...", "similarity_score": ..., "legend": {...} }` |
 | `health_check` | — | `{ "status": "ok", "music21_version": "..."}` |
 | `list_capabilities` | — | Server metadata per conventions |
 
@@ -411,7 +415,7 @@ All error responses use `{"error": "...", "error_code": "..."}` per conventions.
 
 ```json
 {
-  "expand_repeats": true,         // unfold repeats before comparing (default: true)
+  "expand_repeats": false,        // unfold repeats before comparing (default: false — opt-in, see docs/PLAN.md)
   "normalize_pitch": false,       // transpose to concert pitch (default: false)
   "ignore_articulations": false,  // skip articulation comparison (default: false)
   "part_filter": ["Soprano"],     // compare only named parts (default: all)
@@ -473,25 +477,31 @@ Dev dependencies: `pytest`, `pytest-asyncio` (per conventions).
 - [ ] Produce `ComparisonResult` with summary + similarity score
 - [ ] Unit tests with simple SATB fixtures
 
-### Phase 2 — Rich detail
+### Phase 2 — Rich detail — COMPLETE
 
-- [ ] Key/time signature comparison
-- [ ] Voice-aware alignment (multi-voice measures)
-- [ ] Detailed `NoteDiff` with beat positions
-- [ ] Articulation and tie comparison
-- [ ] `to_dict()` / JSON export
+- [x] Key/time signature comparison
+- [x] Voice-aware alignment (multi-voice measures)
+- [x] Detailed `NoteDiff` with beat positions
+- [x] Articulation and tie comparison
+- [x] `to_dict()` / JSON export
 
-### Phase 3 — MCP server & integration
+### Phase 3 — MCP server & integration — COMPLETE
 
-- [ ] `server.py` with all 6 tools (compare, compare_files, quick_similarity, list_changes, health_check, list_capabilities)
-- [ ] `test_server.py` — tool schemas, error propagation
-- [ ] Integration tests with real MusicXML fixtures (`@pytest.mark.integration`)
-- [ ] `install.sh`, `SETUP.md`, `TROUBLESHOOTING.md`, client config examples
-- [ ] Integration with omr-mcp test suite (import engine directly)
-- [ ] Batch comparison CLI for evaluating OMR across sample sets
+- [x] `server.py` with all 6 tools (compare, compare_files, quick_similarity, list_changes, health_check, list_capabilities)
+- [x] `test_server.py` — tool schemas, error propagation
+- [x] Integration tests with real MusicXML fixtures (`@pytest.mark.integration`)
+- [x] `install.sh`, `SETUP.md`, `TROUBLESHOOTING.md`, client config examples
+- [ ] Integration with omr-mcp test suite (import engine directly) — deferred, not part of the Phase 3 scope in docs/PLAN.md
+- [ ] Batch comparison CLI for evaluating OMR across sample sets — not part of Phase 3 or Phase 4's
+      scope in docs/PLAN.md; remains a stretch item (see docs/HANDOVER.md "Next steps (beyond Phase 4)")
 
-### Phase 4 — Advanced features
+### Phase 4 — Advanced features — COMPLETE
 
-- [ ] Visualization: side-by-side annotated score (via render-mcp)
-- [ ] Version comparison report: human-readable summary ("Version B adds a descant in measures 17–24, transposes the tenor down a third in the coda")
-- [ ] Diff export to MusicXML with colored annotations
+- [x] `options` dict wired up (`part_filter`, `measure_range`, `ignore_articulations`,
+      `normalize_pitch`, `expand_repeats`)
+- [x] Version comparison report: human-readable summary (`report.py`, `generate_comparison_report`
+      tool) — grounded in computed diff data (measure-range grouping, constant-`interval_error`
+      transposition detection), not full semantic/arrangement-intent inference
+- [x] Diff export to MusicXML with colored annotations (`annotator.py`, `export_annotated_musicxml`
+      tool) — chainable directly into render-mcp's `render_to_pdf`/`render_to_image` for
+      visualization, without comparer-mcp calling render-mcp directly (see §2: independent servers)

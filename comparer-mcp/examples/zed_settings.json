@@ -1,0 +1,12 @@
+{
+  "_comment": "Place this file at: ~/.config/zed/settings.json",
+  "context_servers": {
+    "comparer": {
+      "command": {
+        "path": "uvx",
+        "args": ["comparer-mcp"]
+      },
+      "settings": {}
+    }
+  }
+}

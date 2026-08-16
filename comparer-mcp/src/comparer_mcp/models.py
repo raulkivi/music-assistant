@@ -3,7 +3,7 @@
 No MCP or music21 imports here — pure data shapes, per docs/architecture.md §4.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 
@@ -19,6 +19,10 @@ class NoteInfo:
     is_chord: bool
     tie: Optional[str]  # "start" | "stop" | "continue" | None
     lyrics: Optional[str]
+    articulations: list[str] = field(default_factory=list)  # e.g. ["staccato", "accent"]
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
@@ -33,6 +37,9 @@ class NoteDiff:
     target: Optional[NoteInfo]  # None for DELETION
     interval_error: Optional[int] = None  # semitones, for pitch differences
 
+    def to_dict(self) -> dict:
+        return asdict(self)
+
 
 @dataclass
 class SignatureDiff:
@@ -41,6 +48,9 @@ class SignatureDiff:
     measure_number: int
     reference_value: str  # e.g. "G major", "3/4"
     target_value: Optional[str]  # None if missing
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
@@ -52,6 +62,9 @@ class MeasureDiff:
     voice_count_reference: int
     voice_count_target: int
     note_diffs: list[NoteDiff] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
@@ -67,6 +80,9 @@ class PartDiff:
     measure_diffs: list[MeasureDiff] = field(default_factory=list)
     measures_missing: list[int] = field(default_factory=list)  # measure numbers
     measures_extra: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
@@ -91,6 +107,9 @@ class ComparisonSummary:
     key_signature_diffs: int
     time_signature_diffs: int
 
+    def to_dict(self) -> dict:
+        return asdict(self)
+
 
 @dataclass
 class ComparisonResult:
@@ -99,3 +118,6 @@ class ComparisonResult:
     similarity_score: float  # 0.0 (completely different) - 1.0 (identical)
     summary: ComparisonSummary
     part_diffs: list[PartDiff] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)

@@ -47,8 +47,8 @@ before writing any code.
 | synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
 | render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
 | musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
-| pitch-mcp | ✅ Phase A+B + UX complete | 93/93 |
-| comparer-mcp | ✅ Phase 1 (core comparison) complete — no `server.py` yet | 45/45 (43 unit + 2 integration) |
+| pitch-mcp | ✅ Phase A+B + UX complete (audio-driven position tracking, DTW via dtaidistance) | 112 unit + 4 integration |
+| comparer-mcp | ✅ Phase 4 (Advanced features) complete — all originally-scoped phases done | 134/134 (127 unit + 7 integration) |
 
 UX deliverables (all servers): PyPI packaging, `install.sh`, `SETUP.md`, `examples/` client configs, `health_check` tool, `TROUBLESHOOTING.md`. See [docs/SETUP_UX_PLAN.md](docs/SETUP_UX_PLAN.md).
 

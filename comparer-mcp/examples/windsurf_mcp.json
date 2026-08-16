@@ -1,0 +1,9 @@
+{
+  "_comment": "Place this file at: ~/.codeium/windsurf/mcp_config.json",
+  "mcpServers": {
+    "comparer": {
+      "command": "uvx",
+      "args": ["comparer-mcp"]
+    }
+  }
+}
