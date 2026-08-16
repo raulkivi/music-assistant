@@ -4,16 +4,19 @@ High-level roadmap for the Choir Music Assistant. Each MCP server has its own de
 in its directory. See [Intro.md](Intro.md) for goals, phases, and data flow.
 See [conventions.md](conventions.md) for coding standards all servers must follow.
 
+**Last reviewed:** 2026-08-16
+
 ---
 
 ## Build Order
 
 ```
 1. omr-mcp            ✅ mostly complete — integration tests pending
-2. synth-mcp          ✅ complete — 60 unit + 7 integration tests pass
-3. render-mcp         ✅ complete — 68/68 tests pass
-4. musicxml-abc-mcp   ✅ complete — 71/71 tests pass
-5. pitch-mcp          ✅ complete (Phase A+B) — 93/93 tests pass
+2. synth-mcp          ✅ complete — 64 unit + 7 integration tests pass
+3. render-mcp         ✅ complete — 73/73 tests pass
+4. musicxml-abc-mcp   ✅ complete — 74/74 tests pass
+5. pitch-mcp          ✅ complete (Phase A+B) — 112 unit + 4 integration tests pass
+6. comparer-mcp       ✅ complete (Phase 4) — 134/134 tests pass (127 unit + 7 integration)
 ```
 
 ---

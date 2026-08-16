@@ -89,11 +89,11 @@ Paper score
 | Server | Status | Tests |
 |--------|--------|-------|
 | omr-mcp | ⚠️ Phase 1-4 complete; default (oemer) engine loses SATB voice structure — fixed via opt-in `engine="audiveris"`, not yet the default | 111 unit |
-| synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
-| render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
-| musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
+| synth-mcp | ✅ Phase 1 + UX complete | 64 unit + 7 integration |
+| render-mcp | ✅ Phase 1 + UX complete | 73/73 incl. integration |
+| musicxml-abc-mcp | ✅ Phase 1 + UX complete | 74/74 incl. integration |
 | pitch-mcp | ✅ Phase A+B + UX complete (audio-driven position tracking, DTW via dtaidistance) | 112 unit + 4 integration |
-| comparer-mcp | ✅ Phase 4 (advanced features) complete | 132/132 (125 unit + 7 integration) |
+| comparer-mcp | ✅ Phase 4 (advanced features) complete | 134/134 (127 unit + 7 integration) |
 
 "UX complete" servers ship as installable PyPI packages with an `install.sh`, a non-technical
 `SETUP.md`, ready-made client configs under `examples/`, a `health_check` tool, and a

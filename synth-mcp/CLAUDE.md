@@ -5,7 +5,7 @@
 Synthesizes audio from a MusicXML score. Callers select voice parts (Soprano, Alto, Tenor, Bass,
 or any combination) and an optional tempo factor. Returns a WAV file path.
 
-**Status:** Phase 1 complete. 60 unit + 7 integration tests pass.
+**Status:** Phase 1 complete. 64 unit + 7 integration tests pass.
 
 ---
 
@@ -13,7 +13,7 @@ or any combination) and an optional tempo factor. Returns a WAV file path.
 
 ```bash
 # From this directory
-VIRTUAL_ENV= .venv/bin/pytest tests/ -v                          # 60 unit tests (fast)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v                          # 64 unit tests (fast)
 
 # Integration tests require a soundfont
 VIRTUAL_ENV= SYNTH_SOUNDFONT_PATH=/usr/share/sounds/sf2/TimGM6mb.sf2 \

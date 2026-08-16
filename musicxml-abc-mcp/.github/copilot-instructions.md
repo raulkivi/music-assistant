@@ -5,7 +5,7 @@
 Converts between MusicXML and ABC notation. ABC is compact and text-based, making it practical
 for Claude to read and edit scores directly in its context window.
 
-**Status:** Phase 1 complete. 71/71 tests pass including integration tests.
+**Status:** Phase 1 complete. 74/74 tests pass including integration tests.
 
 ---
 

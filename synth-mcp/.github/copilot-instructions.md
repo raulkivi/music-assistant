@@ -5,7 +5,7 @@
 Synthesizes audio from a MusicXML score. Callers select voice parts (Soprano, Alto, Tenor, Bass,
 or any combination) and an optional tempo factor. Returns a path to a rendered WAV file.
 
-**Status:** Phase 1 complete. 60 unit + 7 integration tests pass.
+**Status:** Phase 1 complete. 64 unit + 7 integration tests pass.
 
 ---
 

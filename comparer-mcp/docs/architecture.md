@@ -1,7 +1,9 @@
 # MusicXML Comparer — Vision & Architecture
 
 Created: 2026-03-26
-Status: Design draft
+Status: Implemented — Phases 1-4 complete (see `docs/HANDOVER.md`/`docs/PLAN.md` for current
+state; this document is the original design vision and is annotated below where the
+implementation diverged from it)
 Parent research: [../../docs/musicxml-comparison-research.md](../../docs/musicxml-comparison-research.md)
 
 ---
@@ -42,12 +44,14 @@ that answers:
 ┌──────────────────────────▼────────────────────────────────┐
 │                     server.py                             │
 │                                                           │
-│  compare_musicxml()       → full diff JSON                │
-│  compare_musicxml_files() → full diff JSON                │
-│  quick_similarity()       → score + summary               │
-│  list_changes()           → filtered note diffs           │
-│  health_check()           → status                        │
-│  list_capabilities()      → server metadata               │
+│  compare_musicxml()             → full diff JSON           │
+│  compare_musicxml_files()       → full diff JSON           │
+│  quick_similarity()             → score + summary          │
+│  list_changes()                 → filtered note diffs      │
+│  generate_comparison_report()   → human-readable report    │
+│  export_annotated_musicxml()    → colored MusicXML diff    │
+│  health_check()                 → status                   │
+│  list_capabilities()            → server metadata          │
 └──────────────────────────┬────────────────────────────────┘
                            │
 ┌──────────────────────────▼────────────────────────────────┐
@@ -56,20 +60,24 @@ that answers:
 │                                                           │
 │  compare(ref_xml, tgt_xml, options) → ComparisonResult    │
 │  compare_files(ref_path, tgt_path, options)               │
+│  compare_with_annotations(...) → (result, ref, tgt, pairs) │
 │                                                           │
 │  Internally delegates to:                                 │
 │   ┌─────────────────────────────────────────────────┐     │
-│   │  1. ScoreComparator  (comparator.py)            │     │
-│   │     └─ 2. PartMatcher  (part_matcher.py)        │     │
-│   │         └─ 3. MeasureComparator                 │     │
-│   │             └─ 4. NoteAligner (note_aligner.py) │     │
+│   │  1. PartMatcher  (part_matcher.py)              │     │
+│   │     └─ 2. MeasureComparator (measure_comparator.py) │  │
+│   │         └─ 3. NoteAligner (note_aligner.py)     │     │
 │   └─────────────────────────────────────────────────┘     │
+│  report.py / annotator.py consume ComparisonResult          │
+│  downstream of engine.py, no mcp imports either             │
 └──────────────────────────┬────────────────────────────────┘
                            │
 ┌──────────────────────────▼────────────────────────────────┐
 │                    music21 library                         │
 │   converter.parse() → Score → Part → Measure → Note       │
-│   alpha.analysis.aligner.StreamAligner (edit distance)     │
+│   (a custom Wagner-Fischer edit-distance implementation    │
+│   in note_aligner.py is used, not the alpha-status         │
+│   alpha.analysis.aligner.StreamAligner — see §10/PLAN.md)  │
 └───────────────────────────────────────────────────────────┘
 ```
 
@@ -132,6 +140,11 @@ For each matched measure pair within a part, compare contents.
 - Match by voice number (most MusicXML uses voice 1, 2, ...)
 - Fallback: match by pitch range centroid if voice numbers differ
 
+**As implemented:** only the voice-number match and a positional fallback exist
+(`measure_comparator.match_voices`, same cascade shape as `part_matcher.py`). The pitch-range
+centroid fallback described above was judged not worth the complexity — voice numbers are reliable
+in practice — see `docs/PLAN.md` "Changed decisions".
+
 **Output per measure:**
 - Voice count mismatch
 - Duration mismatch
@@ -141,9 +154,12 @@ For each matched measure pair within a part, compare contents.
 
 For each matched voice pair within a measure, align the note sequences.
 
-**Core algorithm:** Edit-distance alignment (Levenshtein-style), leveraging
-`music21.alpha.analysis.aligner.StreamAligner` internally or a custom implementation
-if the alpha API is insufficient.
+**Core algorithm:** Edit-distance alignment (Levenshtein-style / Wagner-Fischer).
+
+**As implemented:** a custom Wagner-Fischer implementation in `note_aligner.py`, not
+`music21.alpha.analysis.aligner.StreamAligner` — the alpha API's interface didn't map cleanly onto
+the MATCH/PITCH_CHANGE/DURATION_CHANGE/SUBSTITUTION/INSERTION/DELETION classification this project
+needs, and alpha APIs may change without notice. See `docs/PLAN.md` "Changed decisions".
 
 **Hash dimensions per note element:**
 - MIDI pitch (integer)
@@ -367,18 +383,18 @@ comparer-mcp/
 │       └── utils.py             # Validation, pitch names, duration formatting
 ├── tests/
 │   ├── __init__.py
-│   ├── test_engine.py           # End-to-end comparison tests (unit)
+│   ├── test_engine.py           # End-to-end comparison tests (unit + integration)
 │   ├── test_server.py           # Tool schemas, error propagation, list_capabilities
 │   ├── test_part_matcher.py     # Part matching edge cases
 │   ├── test_note_aligner.py     # Alignment algorithm tests
-│   ├── test_utils.py
-│   └── fixtures/
-│       ├── simple_ref.musicxml
-│       ├── simple_target.musicxml
-│       ├── missing_part.musicxml
-│       ├── transposed.musicxml
-│       ├── version_a.musicxml   # Same piece, original arrangement
-│       └── version_b.musicxml   # Same piece, modified arrangement
+│   ├── test_measure_comparator.py # Key/time signature + voice matching tests
+│   ├── test_report.py           # generate_comparison_report tests
+│   ├── test_annotator.py        # export_annotated_musicxml tests
+│   └── test_utils.py
+│   # No static tests/fixtures/ directory: unit-test fixtures are built
+│   # programmatically via music21 objects (see docs/PLAN.md "Changed decisions");
+│   # the 7 @pytest.mark.integration tests instead read real compressed .mxl SATB
+│   # samples from ../omr-mcp/test_samples/pdmx_satb_samples/mxl/, shared with omr-mcp.
 ├── examples/
 │   ├── claude_desktop_config.json
 │   ├── continue_config.json
@@ -468,14 +484,14 @@ Dev dependencies: `pytest`, `pytest-asyncio` (per conventions).
 
 ## 11. Implementation Phases
 
-### Phase 1 — Core comparison (MVP)
+### Phase 1 — Core comparison (MVP) — COMPLETE
 
-- [ ] Parse two MusicXML files via music21
-- [ ] Match parts by name
-- [ ] Compare measure counts per part
-- [ ] Align notes within matched measures (pitch + duration)
-- [ ] Produce `ComparisonResult` with summary + similarity score
-- [ ] Unit tests with simple SATB fixtures
+- [x] Parse two MusicXML files via music21
+- [x] Match parts by name
+- [x] Compare measure counts per part
+- [x] Align notes within matched measures (pitch + duration)
+- [x] Produce `ComparisonResult` with summary + similarity score
+- [x] Unit tests with simple SATB fixtures
 
 ### Phase 2 — Rich detail — COMPLETE
 

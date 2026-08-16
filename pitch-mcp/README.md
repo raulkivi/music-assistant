@@ -87,14 +87,19 @@ Audio must be 16-bit PCM WAV. MP3 and FLAC are not supported.
 ```bash
 # Unit tests (no microphone or audio required)
 VIRTUAL_ENV= .venv/bin/pytest tests/ -v
+
+# Integration tests (offline analysis against a committed fixture pair)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration
+
+# Manual tests (real microphone required — skip in CI)
+VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m manual
 ```
 
-All 100 current tests are unit tests, run against mocks and synthetic (in-memory) WAV data — none
-require real audio hardware or pre-recorded fixtures.
-
-The `integration` and `manual` pytest markers are registered in `pyproject.toml` and reserved for
-future Phase B work (fixture-based offline analysis and real-microphone tests, respectively), but
-no tests are marked with them yet, so `-m integration` / `-m manual` currently select nothing.
+112 of the 118 total tests are unit tests, run against mocks and synthetic (in-memory) WAV data —
+none require real audio hardware or pre-recorded fixtures. The other 6 are marked `integration`
+(4 — offline analysis against the committed `tests/fixtures/` pair) or `manual` (2 — full
+real-microphone session lifecycle) and are excluded from a plain `pytest tests/` run by
+`tests/conftest.py`; select them explicitly with `-m integration` / `-m manual`.
 
 ## Dependencies
 

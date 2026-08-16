@@ -265,7 +265,7 @@ async def call_tool(name: str, arguments: dict):
 
         result = {
             "server": "omr-mcp",
-            "version": "0.1.0",
+            "version": "0.1.2",
             "input_formats": list(ext.lstrip(".") for ext in SUPPORTED_IMAGE_FORMATS),
             "output_formats": ["musicxml"],
             "tools": [

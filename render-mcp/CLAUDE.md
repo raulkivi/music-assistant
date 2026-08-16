@@ -5,7 +5,7 @@
 Renders MusicXML scores to PDF (for printing) or PNG (for display in web/mobile apps).
 Uses Verovio (in-process) + cairosvg + pypdf. No MuseScore CLI required.
 
-**Status:** Phase 1 complete. 68/68 tests pass including integration.
+**Status:** Phase 1 complete. 73/73 tests pass including integration.
 
 ---
 

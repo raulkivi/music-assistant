@@ -23,7 +23,7 @@ in the right direction, and what keeps it honest.
 |----------|------|-----|--------|
 | **1** | render-mcp ↔ omr-mcp (via comparer-mcp) | Targets an actual open, critical, root-caused bug (SATB voice loss) — omr-mcp is the only server not marked complete. No regression test exists for it today beyond eyeballing two CPDL fixtures. This loop turns "root-caused" into "measured," with a quantitative similarity score per voice count, and becomes the harness that verifies any future fix. | Medium–large |
 | **2** | synth-mcp → pitch-mcp | pitch-mcp is already complete (112 unit + 4 integration passing), so this hardens a working thing rather than catching a known defect. But it directly replaces a documented weak point — `tests/fixtures/soprano_phrase.wav` is a sine-tone proxy, not real audio — with realistic soundfont-rendered output, at low cost. | Small |
-| **3** | musicxml-abc-mcp self round-trip | Lowest priority: already complete, 71/71 passing, and already has a round-trip `health_check`. Upgrading it from parse-only to a semantic diff closes a blind spot, but there's no known bug behind it. | Small |
+| **3** | musicxml-abc-mcp self round-trip | Lowest priority: already complete, 74/74 passing, and already has a round-trip `health_check`. Upgrading it from parse-only to a semantic diff closes a blind spot, but there's no known bug behind it. | Small |
 
 Recommended order: do #2 first as a quick win (cheap, self-contained), then invest in #1
 (the harness with real payoff), then #3 as polish once the pattern is proven.

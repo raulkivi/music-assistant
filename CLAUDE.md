@@ -44,9 +44,9 @@ before writing any code.
 | Server | Status | Tests |
 |--------|--------|-------|
 | omr-mcp | ⚠️ Phase 1-4 complete; default (oemer) engine loses SATB voice structure — fixed via opt-in `engine="audiveris"`, not yet the default (see omr-mcp/docs/HANDOVER.md) | 111 unit |
-| synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
-| render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
-| musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
+| synth-mcp | ✅ Phase 1 + UX complete | 64 unit + 7 integration |
+| render-mcp | ✅ Phase 1 + UX complete | 73/73 incl. integration |
+| musicxml-abc-mcp | ✅ Phase 1 + UX complete | 74/74 incl. integration |
 | pitch-mcp | ✅ Phase A+B + UX complete (audio-driven position tracking, DTW via dtaidistance) | 112 unit + 4 integration |
 | comparer-mcp | ✅ Phase 4 (Advanced features) complete — all originally-scoped phases done | 134/134 (127 unit + 7 integration) |
 
