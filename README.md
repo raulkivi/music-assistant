@@ -16,7 +16,7 @@ Help choir singers digitize, practice with, and navigate sheet music using their
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| **Phase 1 — MCP Servers** | Six independent MCP servers, each covering one capability | 🔶 5 of 6 complete |
+| **Phase 1 — MCP Servers** | Six independent MCP servers, each covering one capability | 🔶 5 of 6 complete; omr-mcp has a known SATB bug |
 | **Phase 2 — Web PoC** | Web app orchestrating the MCP servers for full UX validation | Planned |
 | **Phase 3 — Android App** | Native Kotlin app for rehearsal use on phones | Planned |
 
@@ -88,12 +88,12 @@ Paper score
 
 | Server | Status | Tests |
 |--------|--------|-------|
-| omr-mcp | ✅ Phase 1 + UX complete (integration tests pending) | 36 unit |
+| omr-mcp | ⚠️ Phase 1 + UX code complete; 20/41 integration — SATB output loses voice structure | 91 unit |
 | synth-mcp | ✅ Phase 1 + UX complete | 60 unit + 7 integration |
 | render-mcp | ✅ Phase 1 + UX complete | 68/68 incl. integration |
 | musicxml-abc-mcp | ✅ Phase 1 + UX complete | 71/71 incl. integration |
 | pitch-mcp | ✅ Phase A+B + UX complete (audio-driven position tracking, DTW via dtaidistance) | 112 unit + 4 integration |
-| comparer-mcp | 🔲 Design complete, implementation not started | — |
+| comparer-mcp | ✅ Phase 4 (advanced features) complete | 132/132 (125 unit + 7 integration) |
 
 "UX complete" servers ship as installable PyPI packages with an `install.sh`, a non-technical
 `SETUP.md`, ready-made client configs under `examples/`, a `health_check` tool, and a

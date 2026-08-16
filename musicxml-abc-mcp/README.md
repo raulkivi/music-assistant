@@ -16,6 +16,7 @@ ABC is ideal for LLM editing because it is concise enough to fit in a context wi
 | `abc_to_musicxml` | Convert ABC notation back to MusicXML |
 | `validate_abc` | Parse an ABC string and return errors or warnings |
 | `list_capabilities` | Return server metadata: backend version, ABC standard |
+| `health_check` | Run a MusicXML → ABC → MusicXML round-trip smoke test and report status |
 
 ## Installation
 
@@ -25,6 +26,11 @@ uv sync --extra dev
 ```
 
 Note: use `--extra dev` (not `--group dev`) to install pytest.
+
+For a guided setup (installs `uv` if needed, then syncs dependencies), run `./install.sh` —
+see [SETUP.md](SETUP.md) for step-by-step instructions. Ready-made client configs (Claude
+Desktop, Cursor, Windsurf, Continue, Zed) are in [examples/](examples/). If something doesn't
+work, check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Running
 
@@ -36,29 +42,34 @@ No environment variables required.
 
 ## Usage examples
 
+All tools take and return strings directly (no file paths) — the MCP client is responsible for
+reading/writing files if needed.
+
 ```json
 // Convert full score to ABC
 {
   "tool": "musicxml_to_abc",
-  "arguments": {"musicxml_path": "/path/to/score.mxl"}
+  "arguments": {"musicxml": "<score-partwise>...</score-partwise>"}
 }
+// → {"abc": "X:1\nT:...\n...", "parts_included": ["Soprano", "Alto", "Tenor", "Bass"], "warnings": []}
 
 // Extract just the Soprano part
 {
   "tool": "musicxml_to_abc",
-  "arguments": {"musicxml_path": "/path/to/score.mxl", "part_name": "Soprano"}
+  "arguments": {"musicxml": "<score-partwise>...</score-partwise>", "part_id": "Soprano"}
 }
 
 // Convert edited ABC back to MusicXML
 {
   "tool": "abc_to_musicxml",
-  "arguments": {"abc_text": "X:1\nT:My Song\n...", "output_path": "/tmp/edited.mxl"}
+  "arguments": {"abc": "X:1\nT:My Song\n..."}
 }
+// → {"musicxml": "<?xml version=\"1.0\"?>...", "warnings": []}
 
 // Validate ABC before converting
 {
   "tool": "validate_abc",
-  "arguments": {"abc_text": "X:1\nT:My Song\n..."}
+  "arguments": {"abc": "X:1\nT:My Song\n..."}
 }
 ```
 

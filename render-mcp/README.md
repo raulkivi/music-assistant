@@ -13,8 +13,15 @@ Takes a MusicXML document and produces print-ready PDFs or screen-ready PNG imag
 | `render_to_pdf` | Render the full score to a multi-page PDF file |
 | `render_to_image` | Render a single page to PNG or SVG |
 | `list_capabilities` | Return server metadata: backend version, supported formats, available renderers |
+| `health_check` | Check whether all runtime dependencies are available and the server is ready to render scores |
 
 ## Installation
+
+Quick install: run `./install.sh` for one-command setup, or see [SETUP.md](SETUP.md) for a
+non-technical walkthrough. Ready-made client configs (Claude Desktop, Cursor, Windsurf, Continue,
+Zed) are in [`examples/`](examples/). If something isn't working, check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+Manual setup:
 
 ```bash
 cd render-mcp

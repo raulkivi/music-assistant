@@ -165,7 +165,7 @@ async def call_tool(name: str, arguments: dict):
 
         result = {
             "server": "musicxml-abc-mcp",
-            "version": "0.1.0",
+            "version": "0.1.2",
             "input_formats": ["musicxml", "abc"],
             "output_formats": ["abc", "musicxml"],
             "tools": ["musicxml_to_abc", "abc_to_musicxml", "validate_abc", "list_capabilities", "health_check"],

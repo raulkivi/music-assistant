@@ -219,7 +219,7 @@ async def call_tool(name: str, arguments: dict):
                 text=json.dumps(
                     {
                         "server": "render-mcp",
-                        "version": "0.1.0",
+                        "version": "0.1.2",
                         "input_formats": ["musicxml"],
                         "output_formats": ["pdf", "png", "svg"],
                         "tools": ["render_to_pdf", "render_to_image", "list_capabilities"],

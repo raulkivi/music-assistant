@@ -81,7 +81,7 @@ class TestCallToolListCapabilities:
         result = await call_tool("list_capabilities", {})
         payload = json.loads(result[0].text)
         assert payload["server"] == "musicxml-abc-mcp"
-        assert payload["version"] == "0.1.0"
+        assert payload["version"] == "0.1.2"
         assert "musicxml" in payload["input_formats"]
         assert "abc" in payload["input_formats"]
         assert "abc" in payload["output_formats"]

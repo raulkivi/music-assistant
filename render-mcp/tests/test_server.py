@@ -78,7 +78,7 @@ class TestListCapabilities:
         data = json.loads(result[0].text)
 
         assert data["server"] == "render-mcp"
-        assert data["version"] == "0.1.0"
+        assert data["version"] == "0.1.2"
         assert "musicxml" in data["input_formats"]
         assert "pdf" in data["output_formats"]
         assert "png" in data["output_formats"]
