@@ -124,30 +124,31 @@ async def call_tool(name: str, arguments: dict):
                 # Decode base64 to temporary file
                 success, path_or_error = decode_base64_image(image)
                 if not success:
-                    return [TextContent(type="text", text=json.dumps({"error": path_or_error}))]
+                    error_result = {"error": path_or_error, "error_code": "INVALID_INPUT"}
+                    return [TextContent(type="text", text=json.dumps(error_result))]
                 image_path = path_or_error
             else:
                 image_path = image
-            
+
             result = recognize_image(image_path)
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
             logger.error(f"Error processing image: {str(e)}")
-            error_result = {"error": f"Failed to process image: {str(e)}"}
+            error_result = {"error": f"Failed to process image: {str(e)}", "error_code": "PROCESSING_FAILED"}
             return [TextContent(type="text", text=json.dumps(error_result))]
-    
+
     elif name == "recognize_sheet_to_file":
         input_path = arguments["input_path"]
         output_path = arguments.get("output_path")
-        
+
         logger.info(f"Processing sheet music to file: {input_path}")
-        
+
         try:
             result = recognize_image_to_file(input_path, output_path)
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
             logger.error(f"Error processing image: {str(e)}")
-            error_result = {"error": f"Failed to process image: {str(e)}"}
+            error_result = {"error": f"Failed to process image: {str(e)}", "error_code": "PROCESSING_FAILED"}
             return [TextContent(type="text", text=json.dumps(error_result))]
     
     elif name == "recognize_sheets":
@@ -173,7 +174,8 @@ async def call_tool(name: str, arguments: dict):
                 resolved_paths.append(img)
 
         if resolution_error:
-            return [TextContent(type="text", text=json.dumps({"error": resolution_error}))]
+            error_result = {"error": resolution_error, "error_code": "INVALID_INPUT"}
+            return [TextContent(type="text", text=json.dumps(error_result))]
 
         try:
             result = recognize_images(resolved_paths)

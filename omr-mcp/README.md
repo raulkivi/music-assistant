@@ -14,6 +14,8 @@ Takes a photo or scan of printed sheet music and returns a MusicXML document. Ha
 | `recognize_sheet_to_file` | Convert a single image and write MusicXML to a file |
 | `recognize_sheets` | Process multiple pages and merge them into one MusicXML document |
 | `list_capabilities` | Return server metadata: backend version, input/output formats, available tools |
+| `list_supported_formats` | (Deprecated — use `list_capabilities`) List supported input and output formats |
+| `health_check` | Check that all runtime dependencies are available and return a human-readable status summary; useful on first run |
 
 ## Installation
 
@@ -23,6 +25,11 @@ uv sync
 ```
 
 On first run, oemer downloads ~100 MB of model checkpoints. This happens once and is cached.
+
+**Quick install:** `bash install.sh` sets up everything in one command and prints a ready-to-paste
+client config — see [SETUP.md](SETUP.md). Ready-made configs for Claude Desktop, Cursor, Windsurf,
+Continue, and Zed are in [`examples/`](examples/). Having trouble? Check
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Running
 
@@ -67,7 +74,7 @@ No environment variables required.
 # Unit tests (fast, no model required)
 VIRTUAL_ENV= .venv/bin/pytest tests/ -v
 
-# Integration tests (requires model download, ~10 min per page)
+# Integration tests (~10 min one-time model-checkpoint download, then ~90-100s per page on CPU)
 VIRTUAL_ENV= .venv/bin/pytest tests/ -v -m integration
 ```
 
@@ -87,13 +94,25 @@ Source: [PDMX dataset](https://zenodo.org/records/14648209) — 250K+ public dom
 ## Dependencies
 
 - [oemer](https://github.com/BreezeWhite/oemer) — deep learning OMR engine (UNet + SVM, ONNX Runtime)
+- `onnxruntime==1.18.1` — pinned; newer releases reject the ConvTranspose shapes baked into oemer's checkpoints (see `pyproject.toml` comments / `docs/HANDOVER.md` gotchas)
+- `opencv-python-headless==4.10.0.84` — pinned; 5.x changed `cv2.HoughLinesP()`'s return shape, which crashes oemer's staffline extraction (see `pyproject.toml` comments / `docs/HANDOVER.md` gotchas)
 - [Pillow](https://python-pillow.org/) — image loading and validation
 - [defusedxml](https://github.com/tiran/defusedxml) — safe XML parsing
 - [mcp](https://github.com/modelcontextprotocol/python-sdk) — MCP protocol
 
+## Known limitations
+
+- **SATB voice structure is currently lost.** oemer reads multi-staff choir systems sequentially
+  rather than simultaneously, so a 4–5 voice SATB score comes out as a single merged `<part>` with
+  the clef alternating back and forth, instead of one part per voice. This is real data loss, not
+  a benign modeling difference (confirmed by inspecting generated MusicXML), and makes current
+  output **unusable for anything that depends on multi-voice structure** — e.g. per-voice
+  synthesis or score comparison. This is a known, currently open issue; see
+  [docs/HANDOVER.md](docs/HANDOVER.md) for the full investigation.
+
 ## Performance notes
 
-- Processing time: 3–5 minutes per page on CPU
+- Processing time: ~90–100s per page on CPU once the model checkpoints are cached
 - oemer output may vary slightly between runs — do not assert on exact XML equality
 - The generated MusicXML is functionally correct but may not pass strict schema validation
 

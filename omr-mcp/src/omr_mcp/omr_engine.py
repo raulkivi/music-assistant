@@ -145,34 +145,40 @@ def recognize_image(image_path: str) -> dict[str, Any]:
     
     # Validate input file
     if not path.exists():
-        return {"error": f"File not found: {image_path}"}
-    
+        return {"error": f"File not found: {image_path}", "error_code": "FILE_NOT_FOUND"}
+
     if path.suffix.lower() not in [".png", ".jpg", ".jpeg"]:
-        return {"error": f"Unsupported format: {path.suffix}. Supported formats: PNG, JPEG"}
-    
+        return {
+            "error": f"Unsupported format: {path.suffix}. Supported formats: PNG, JPEG",
+            "error_code": "UNSUPPORTED_FORMAT",
+        }
+
     start_time = time.time()
-    
+
     try:
         logger.info(f"Starting OMR processing for: {path}")
-        
+
         # Process the image
         logger.info("Running oemer recognition...")
         result_path = _run_oemer(str(path))
-        
+
         # Read the generated MusicXML
         if not Path(result_path).exists():
-            return {"error": f"OMR processing completed but output file not found: {result_path}"}
-        
+            return {
+                "error": f"OMR processing completed but output file not found: {result_path}",
+                "error_code": "PROCESSING_FAILED",
+            }
+
         with open(result_path, "r", encoding="utf-8") as f:
             musicxml_content = f.read()
-        
+
         processing_time_ms = int((time.time() - start_time) * 1000)
-        
+
         # Extract metadata from MusicXML
         xml_metadata = _extract_musicxml_metadata(musicxml_content)
-        
+
         logger.info(f"OMR processing completed successfully in {processing_time_ms}ms")
-        
+
         return {
             "musicxml": musicxml_content,
             "metadata": {
@@ -183,16 +189,18 @@ def recognize_image(image_path: str) -> dict[str, Any]:
                 "engine": "oemer"
             }
         }
-        
+
     except ImportError as e:
         return {
-            "error": f"oemer library not available: {str(e)}. Please install with: pip install oemer"
+            "error": f"oemer library not available: {str(e)}. Please install with: pip install oemer",
+            "error_code": "PROCESSING_FAILED",
         }
     except Exception as e:
         processing_time_ms = int((time.time() - start_time) * 1000)
         logger.error(f"OMR processing failed after {processing_time_ms}ms: {str(e)}")
         return {
             "error": f"OMR processing failed: {str(e)}",
+            "error_code": "PROCESSING_FAILED",
             "metadata": {
                 "source": str(path),
                 "processing_time_ms": processing_time_ms,
@@ -286,28 +294,34 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
     
     # Validate input file
     if not path.exists():
-        return {"error": f"File not found: {input_path}"}
-    
+        return {"error": f"File not found: {input_path}", "error_code": "FILE_NOT_FOUND"}
+
     if path.suffix.lower() not in [".png", ".jpg", ".jpeg"]:
-        return {"error": f"Unsupported format: {path.suffix}. Supported formats: PNG, JPEG"}
-    
+        return {
+            "error": f"Unsupported format: {path.suffix}. Supported formats: PNG, JPEG",
+            "error_code": "UNSUPPORTED_FORMAT",
+        }
+
     # Determine output path
     if output_path is None:
         output_path = str(path.with_suffix(".musicxml"))
-    
+
     start_time = time.time()
-    
+
     try:
         logger.info(f"Starting OMR processing for: {path}")
-        
+
         # Process the image
         logger.info("Running oemer recognition...")
         result_path = _run_oemer(str(path))
-        
+
         # Read and copy/move to desired output path
         if not Path(result_path).exists():
-            return {"error": f"OMR processing completed but output file not found: {result_path}"}
-        
+            return {
+                "error": f"OMR processing completed but output file not found: {result_path}",
+                "error_code": "PROCESSING_FAILED",
+            }
+
         # Copy to output path if different
         if str(Path(result_path).resolve()) != str(Path(output_path).resolve()):
             shutil.copy2(result_path, output_path)
@@ -336,13 +350,15 @@ def recognize_image_to_file(input_path: str, output_path: Optional[str] = None) 
         
     except ImportError as e:
         return {
-            "error": f"oemer library not available: {str(e)}. Please install with: pip install oemer"
+            "error": f"oemer library not available: {str(e)}. Please install with: pip install oemer",
+            "error_code": "PROCESSING_FAILED",
         }
     except Exception as e:
         processing_time_ms = int((time.time() - start_time) * 1000)
         logger.error(f"OMR processing failed after {processing_time_ms}ms: {str(e)}")
         return {
             "error": f"OMR processing failed: {str(e)}",
+            "error_code": "PROCESSING_FAILED",
             "metadata": {
                 "source": str(path),
                 "processing_time_ms": processing_time_ms,

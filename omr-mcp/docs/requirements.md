@@ -92,17 +92,15 @@ The server MUST implement the Model Context Protocol using `mcp.server.stdio.std
 
 ```
 Input:
-  image_path   string  (optional) absolute path to PNG/JPEG
-  image_base64 string  (optional) base64-encoded image data
-  mime_type    string  (optional) "image/png" or "image/jpeg"; required when image_base64 is provided
-  output_path  string  (optional) path to write MusicXML; if omitted, MusicXML is returned inline
-
-At least one of image_path or image_base64 must be provided.
+  image   string  required  file path or base64-encoded image data
+  format  string  (optional) "path" or "base64" hint; auto-detected if omitted
 
 Output:
   musicxml     string  MusicXML document
   metadata     object
-    source              string   original image path or "base64"
+    source              string   original image path
+    staves_detected     integer
+    measures            integer
     processing_time_ms  integer
     engine              string   "oemer"
 ```
@@ -111,7 +109,7 @@ Output:
 
 ```
 Input:
-  image_path   string  required  absolute path to PNG/JPEG
+  input_path   string  required  path to input PNG/JPEG
   output_path  string  optional  path to write MusicXML (auto-generated if omitted)
 
 Output:
@@ -155,8 +153,10 @@ All error responses MUST follow this structure:
 | Code | Condition |
 |------|-----------|
 | `FILE_NOT_FOUND` | Input file does not exist |
-| `INVALID_FORMAT` | Unsupported file format |
+| `UNSUPPORTED_FORMAT` | File extension is not PNG/JPEG |
+| `FILE_TOO_LARGE` | Image exceeds the maximum allowed size |
 | `INVALID_INPUT` | Image cannot be decoded or opened |
+| `INVALID_PARAMETER` | A tool argument is malformed (e.g. `images` is not a list) |
 | `PROCESSING_FAILED` | OMR engine error |
 
 ---
