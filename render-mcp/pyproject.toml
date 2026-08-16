@@ -1,7 +1,8 @@
 [project]
 name = "render-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "MCP server that renders MusicXML to PDF or PNG"
+readme = "README.md"
 authors = [
     { name = "Raul Kivi", email = "raulkivi@users.noreply.github.com" },
 ]
